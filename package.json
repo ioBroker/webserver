@@ -1,0 +1,37 @@
+{
+  "name": "@iobroker/webserver",
+  "version": "0.0.1",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.18.0 < 15 || >= 16.0.0"
+  },
+  "homepage": "https://github.com/ioBroker/webserver",
+  "author": {
+    "name": "Moritz Heusinger",
+    "email": "moritz.heusinger@gmail.com"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json"
+  },
+  "bugs": {
+    "url": "https://github.com/ioBroker/webserver/issues"
+  },
+  "files": [
+    "build/",
+    "LICENSE"
+  ],
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "devDependencies": {
+    "@types/node": "^17.0.21",
+    "@typescript-eslint/eslint-plugin": "^5.13.0",
+    "@typescript-eslint/parser": "^5.13.0",
+    "chai": "^4.3.6",
+    "eslint": "^8.14.0",
+    "eslint-config-prettier": "^8.4.0",
+    "eslint-plugin-prettier": "^4.0.0",
+    "mocha": "^9.2.1",
+    "prettier": "^2.5.1",
+    "typescript": "^4.8.2"
+  }
+}
