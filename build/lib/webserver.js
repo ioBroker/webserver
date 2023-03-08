@@ -7,12 +7,13 @@ exports.Webserver = void 0;
 const tls_1 = __importDefault(require("tls"));
 const http_1 = __importDefault(require("http"));
 const https_1 = __importDefault(require("https"));
-const SYSTEM_CERTIFICATES_ID = 'system.certificates';
+const certificateManager_1 = require("./certificateManager");
 class Webserver {
     constructor(options) {
         this.secure = options.secure;
         this.adapter = options.adapter;
         this.app = options.app;
+        this.certManager = new certificateManager_1.CertificateManager({ adapter: options.adapter });
     }
     /**
      * Initialize new https/http server according to configuration, it will be present on `this.server`
@@ -27,7 +28,7 @@ class Webserver {
         const selfSignedContext = await this.getSelfSignedContext();
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
-        const collections = await this.getCertificateCollection();
+        const collections = await this.certManager.getCertificateCollection();
         if (!collections || !Object.keys(collections).length) {
             this.adapter.log.warn('Could not find any certificate collections - check ACME installation or consider installing');
             if (selfSignedContext) {
@@ -44,7 +45,7 @@ class Webserver {
             throw new Error('Cannot create secure server: No certificate collection found');
         }
         let contexts = this.buildSecureContexts(collections);
-        this.subscribeCertificateCollections(null, (err, collections) => {
+        this.certManager.subscribeCertificateCollections(null, (err, collections) => {
             if (!err && collections) {
                 this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
                 contexts = this.buildSecureContexts(collections);
@@ -126,57 +127,6 @@ class Webserver {
             }
         }
         return contexts;
-    }
-    /**
-     * Subscribes certificate collections object and calls callback on every change
-     * @param collectionId if null, return all collections in callback
-     * @param callback called on every change
-     */
-    subscribeCertificateCollections(collectionId, callback) {
-        this.adapter.subscribeForeignObjects(SYSTEM_CERTIFICATES_ID);
-        this.adapter.on('objectChange', (id, obj) => {
-            var _a;
-            if (id === SYSTEM_CERTIFICATES_ID) {
-                this.adapter.log.debug(`${SYSTEM_CERTIFICATES_ID} updated`);
-                if (!((_a = obj === null || obj === void 0 ? void 0 : obj.native) === null || _a === void 0 ? void 0 : _a.collections)) {
-                    return;
-                }
-                const collections = obj.native.collections;
-                if (!collectionId) {
-                    // No specific ID requested, return them all
-                    callback(null, collections);
-                }
-                else {
-                    if (Array.isArray(collections) && collectionId in collections) {
-                        callback(null, { collectionId: collections[collectionId] });
-                    }
-                    else {
-                        // Can't find requested collection ID, return empty object & error
-                        callback(new Error(`Subscribed collection ID ${collectionId} not found`), {});
-                    }
-                }
-            }
-        });
-    }
-    /**
-     * Returns collection of SSL keys, certificates, etc. by ID.
-     *
-     * @param collectionId or omit to return all
-     */
-    async getCertificateCollection(collectionId) {
-        try {
-            const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
-            // If collectionId does not exist not an error situation: return null to indicate this.
-            const collections = obj === null || obj === void 0 ? void 0 : obj.native.collections;
-            if (!collections) {
-                return null;
-            }
-            return collectionId ? collections[collectionId] : collections;
-        }
-        catch (e) {
-            this.adapter.log.error(`No certificates found: ${e.message}`);
-            return null;
-        }
     }
     /**
      * Get the self-signed certificate context

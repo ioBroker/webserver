@@ -1,7 +1,6 @@
 /// <reference types="iobroker" />
 /// <reference types="node" />
 /// <reference types="node" />
-/// <reference types="node" />
 import tls from 'tls';
 import http from 'http';
 interface WebserverOptions {
@@ -11,26 +10,12 @@ interface WebserverOptions {
     /** if https should be used */
     secure: boolean;
 }
-interface CertificateCollection {
-    /** Creating adapter */
-    from: string;
-    /** expiry date/time - mandatory */
-    /** So not everyone needs to decode cert to discover this */
-    tsExpires: number;
-    /** private key - mandatory */
-    key: string | Buffer;
-    /** public certificate - mandatory */
-    cert: string | Buffer;
-    /** domains - mandatory */
-    domains: string[];
-    /** chain - optional */
-    chain?: string | Buffer;
-}
 export declare class Webserver {
     private server;
     private readonly adapter;
     private readonly secure;
     private readonly app;
+    private readonly certManager;
     constructor(options: WebserverOptions);
     /**
      * Initialize new https/http server according to configuration, it will be present on `this.server`
@@ -41,14 +26,6 @@ export declare class Webserver {
      * @param collections the certificate collections
      */
     private buildSecureContexts;
-    /**
-     * Subscribes certificate collections object and calls callback on every change
-     * @param collectionId if null, return all collections in callback
-     * @param callback called on every change
-     */
-    private subscribeCertificateCollections;
-    getCertificateCollection(): Promise<Record<string, CertificateCollection> | null>;
-    getCertificateCollection(collectionId: string): Promise<CertificateCollection | null>;
     /**
      * Get the self-signed certificate context
      */

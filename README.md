@@ -10,7 +10,7 @@ Install via `npm i @iobroker/webserver`.
 Use the webserver in your ioBroker adapter as following:
 
 ```typescript
-import { Webserver } from '@iobroker/webserver';
+import { Webserver, CertificateManager } from '@iobroker/webserver';
 
 const webserver = new Webserver({ app, adapter, secure: true });
 
@@ -18,8 +18,10 @@ await webserver.init();
 
 // now the server is available at webserver.server
 
+const certManager = new CertificateManager({ adapter })
+
 // get all collections
-const collections = await webserver.getCertificateCollection();
+const collections = await certManager.getCertificateCollection();
 ```
 
 ## Changelog
