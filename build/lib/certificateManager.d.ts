@@ -22,31 +22,39 @@ export type SubscribeCertificateCollectionsCallback = (err: Error | null, collec
 export declare class CertificateManager {
     private readonly adapter;
     constructor(options: CertificateManagerOptions);
-    getCertificateCollection(): Promise<Record<string, CertificateCollection> | null>;
-    getCertificateCollection(collectionId: string): Promise<CertificateCollection | null>;
     /**
-     * Saves collection of SSL keys, certificates, etc. by ID.
+     * Returns all collections of SSL keys, certificates, etc.
+     */
+    getAllCollections(): Promise<Record<string, CertificateCollection> | null>;
+    /**
+     * Returns collection of SSL keys, certificates, etc. by ID
+     *
+     * @param collectionId id of the collection to filter for
+     */
+    getCollection(collectionId: string): Promise<CertificateCollection | Record<string, CertificateCollection> | null>;
+    /**
+     * Saves collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      * @param collection object holding all related keys, certificates, etc.
      */
-    setCertificateCollection(collectionId: string, collection: CertificateCollection): Promise<void>;
+    setCollection(collectionId: string, collection: CertificateCollection): Promise<void>;
     /**
-     * Remove collection of SSL keys, certificates, etc. by ID.
+     * Remove collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      */
-    delCertificateCollection(collectionId: string): Promise<void>;
+    delCollection(collectionId: string): Promise<void>;
     /**
      * Subscribes certificate collections object and calls callback on every change
      *
      * @param collectionId if null, return all collections in callback
      * @param callback called on every change
      */
-    subscribeCertificateCollections(collectionId: string | null, callback: SubscribeCertificateCollectionsCallback): void;
+    subscribeCollections(collectionId: string | null, callback: SubscribeCertificateCollectionsCallback): void;
     /**
      * Returns list of available certificate collection IDs
      */
-    listCertificateCollectionIds(): Promise<string[]>;
+    getCollectionIds(): Promise<string[]>;
 }
 export {};

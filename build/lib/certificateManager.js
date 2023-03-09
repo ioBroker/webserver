@@ -7,19 +7,14 @@ class CertificateManager {
         this.adapter = options.adapter;
     }
     /**
-     * Returns collection of SSL keys, certificates, etc. by ID.
-     *
-     * @param collectionId or omit to return all
+     * Returns all collections of SSL keys, certificates, etc.
      */
-    async getCertificateCollection(collectionId) {
+    async getAllCollections() {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
             // If collectionId does not exist not an error situation: return null to indicate this.
             const collections = obj === null || obj === void 0 ? void 0 : obj.native.collections;
-            if (!collections) {
-                return null;
-            }
-            return collectionId ? collections[collectionId] : collections;
+            return collections || null;
         }
         catch (e) {
             this.adapter.log.error(`No certificates found: ${e.message}`);
@@ -27,12 +22,27 @@ class CertificateManager {
         }
     }
     /**
-     * Saves collection of SSL keys, certificates, etc. by ID.
+     * Returns collection of SSL keys, certificates, etc. by ID
+     *
+     * @param collectionId id of the collection to filter for
+     */
+    async getCollection(collectionId) {
+        try {
+            const collections = await this.getAllCollections();
+            return collections ? collections[collectionId] : null;
+        }
+        catch (e) {
+            this.adapter.log.error(`No certificates found: ${e.message}`);
+            return null;
+        }
+    }
+    /**
+     * Saves collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      * @param collection object holding all related keys, certificates, etc.
      */
-    async setCertificateCollection(collectionId, collection) {
+    async setCollection(collectionId, collection) {
         const mandatory = ['from', 'tsExpires', 'key', 'cert', 'domains'];
         if (!mandatory.every(key => Object.keys(collection).includes(key))) {
             throw new Error(`At least one mandatory key (${mandatory.join(',')}) missing from collection`);
@@ -46,11 +56,11 @@ class CertificateManager {
         });
     }
     /**
-     * Remove collection of SSL keys, certificates, etc. by ID.
+     * Remove collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      */
-    async delCertificateCollection(collectionId) {
+    async delCollection(collectionId) {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
             if ((obj === null || obj === void 0 ? void 0 : obj.native.collections) &&
@@ -74,7 +84,7 @@ class CertificateManager {
      * @param collectionId if null, return all collections in callback
      * @param callback called on every change
      */
-    subscribeCertificateCollections(collectionId, callback) {
+    subscribeCollections(collectionId, callback) {
         this.adapter.subscribeForeignObjects(SYSTEM_CERTIFICATES_ID);
         this.adapter.on('objectChange', (id, obj) => {
             var _a;
@@ -103,7 +113,7 @@ class CertificateManager {
     /**
      * Returns list of available certificate collection IDs
      */
-    async listCertificateCollectionIds() {
+    async getCollectionIds() {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
             const collections = obj === null || obj === void 0 ? void 0 : obj.native.collections;

@@ -1,8 +1,10 @@
 /// <reference types="iobroker" />
 /// <reference types="node" />
 /// <reference types="node" />
+/// <reference types="node" />
 import tls from 'tls';
 import http from 'http';
+import https from 'https';
 interface WebserverOptions {
     /** the ioBroker adapter */
     adapter: ioBroker.Adapter;
@@ -20,7 +22,7 @@ export declare class Webserver {
     /**
      * Initialize new https/http server according to configuration, it will be present on `this.server`
      */
-    init(): Promise<void>;
+    init(): Promise<http.Server | https.Server>;
     /**
      * Build secure context from certificate collections
      * @param collections the certificate collections

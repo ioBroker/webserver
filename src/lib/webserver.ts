@@ -27,11 +27,11 @@ export class Webserver {
     /**
      * Initialize new https/http server according to configuration, it will be present on `this.server`
      */
-    async init(): Promise<void> {
+    async init(): Promise<http.Server | https.Server> {
         if (!this.secure) {
             this.adapter.log.debug('Secure connection not enabled - using http createServer');
             this.server = http.createServer(this.app);
-            return;
+            return this.server;
         }
 
         // Load self-signed certificate for fallback
@@ -39,7 +39,7 @@ export class Webserver {
 
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
-        const collections = await this.certManager.getCertificateCollection();
+        const collections = await this.certManager.getAllCollections();
         if (!collections || !Object.keys(collections).length) {
             this.adapter.log.warn(
                 'Could not find any certificate collections - check ACME installation or consider installing'
@@ -53,7 +53,7 @@ export class Webserver {
                     'Could not find self-signed certificate - falling back to insecure http createServer'
                 );
                 this.server = http.createServer(this.app);
-                return;
+                return this.server;
             }
         }
 
@@ -63,7 +63,7 @@ export class Webserver {
 
         let contexts = this.buildSecureContexts(collections);
 
-        this.certManager.subscribeCertificateCollections(null, (err, collections) => {
+        this.certManager.subscribeCollections(null, (err, collections) => {
             if (!err && collections) {
                 this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
                 contexts = this.buildSecureContexts(collections);
@@ -127,6 +127,7 @@ export class Webserver {
 
         this.adapter.log.debug('Using https createServer');
         this.server = https.createServer(options, this.app);
+        return this.server;
     }
 
     /**

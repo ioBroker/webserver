@@ -22,13 +22,13 @@ class Webserver {
         if (!this.secure) {
             this.adapter.log.debug('Secure connection not enabled - using http createServer');
             this.server = http_1.default.createServer(this.app);
-            return;
+            return this.server;
         }
         // Load self-signed certificate for fallback
         const selfSignedContext = await this.getSelfSignedContext();
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
-        const collections = await this.certManager.getCertificateCollection();
+        const collections = await this.certManager.getAllCollections();
         if (!collections || !Object.keys(collections).length) {
             this.adapter.log.warn('Could not find any certificate collections - check ACME installation or consider installing');
             if (selfSignedContext) {
@@ -38,14 +38,14 @@ class Webserver {
                 // This really should never happen as selfSigned should always be available
                 this.adapter.log.error('Could not find self-signed certificate - falling back to insecure http createServer');
                 this.server = http_1.default.createServer(this.app);
-                return;
+                return this.server;
             }
         }
         if (!collections) {
             throw new Error('Cannot create secure server: No certificate collection found');
         }
         let contexts = this.buildSecureContexts(collections);
-        this.certManager.subscribeCertificateCollections(null, (err, collections) => {
+        this.certManager.subscribeCollections(null, (err, collections) => {
             if (!err && collections) {
                 this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
                 contexts = this.buildSecureContexts(collections);
@@ -106,6 +106,7 @@ class Webserver {
         };
         this.adapter.log.debug('Using https createServer');
         this.server = https_1.default.createServer(options, this.app);
+        return this.server;
     }
     /**
      * Build secure context from certificate collections

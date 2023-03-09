@@ -14,14 +14,13 @@ import { Webserver, CertificateManager } from '@iobroker/webserver';
 
 const webserver = new Webserver({ app, adapter, secure: true });
 
-await webserver.init();
-
-// now the server is available at webserver.server
+// initialize and you can use your server as known
+const server = await webserver.init();
 
 const certManager = new CertificateManager({ adapter })
 
 // get all collections
-const collections = await certManager.getCertificateCollection();
+const collections = await certManager.getAllCollections();
 ```
 
 ## Changelog

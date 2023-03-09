@@ -32,27 +32,16 @@ export class CertificateManager {
         this.adapter = options.adapter;
     }
 
-    getCertificateCollection(): Promise<Record<string, CertificateCollection> | null>;
-    getCertificateCollection(collectionId: string): Promise<CertificateCollection | null>;
-
     /**
-     * Returns collection of SSL keys, certificates, etc. by ID.
-     *
-     * @param collectionId or omit to return all
+     * Returns all collections of SSL keys, certificates, etc.
      */
-    async getCertificateCollection(
-        collectionId?: string
-    ): Promise<CertificateCollection | Record<string, CertificateCollection> | null> {
+    async getAllCollections(): Promise<Record<string, CertificateCollection> | null> {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
             // If collectionId does not exist not an error situation: return null to indicate this.
             const collections = obj?.native.collections;
 
-            if (!collections) {
-                return null;
-            }
-
-            return collectionId ? collections[collectionId] : collections;
+            return collections || null;
         } catch (e: any) {
             this.adapter.log.error(`No certificates found: ${e.message}`);
             return null;
@@ -60,12 +49,30 @@ export class CertificateManager {
     }
 
     /**
-     * Saves collection of SSL keys, certificates, etc. by ID.
+     * Returns collection of SSL keys, certificates, etc. by ID
+     *
+     * @param collectionId id of the collection to filter for
+     */
+    async getCollection(
+        collectionId: string
+    ): Promise<CertificateCollection | Record<string, CertificateCollection> | null> {
+        try {
+            const collections = await this.getAllCollections();
+
+            return collections ? collections[collectionId] : null;
+        } catch (e: any) {
+            this.adapter.log.error(`No certificates found: ${e.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Saves collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      * @param collection object holding all related keys, certificates, etc.
      */
-    async setCertificateCollection(collectionId: string, collection: CertificateCollection): Promise<void> {
+    async setCollection(collectionId: string, collection: CertificateCollection): Promise<void> {
         const mandatory = ['from', 'tsExpires', 'key', 'cert', 'domains'];
         if (!mandatory.every(key => Object.keys(collection).includes(key))) {
             throw new Error(`At least one mandatory key (${mandatory.join(',')}) missing from collection`);
@@ -81,11 +88,11 @@ export class CertificateManager {
     }
 
     /**
-     * Remove collection of SSL keys, certificates, etc. by ID.
+     * Remove collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      */
-    async delCertificateCollection(collectionId: string): Promise<void> {
+    async delCollection(collectionId: string): Promise<void> {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
             if (
@@ -110,10 +117,7 @@ export class CertificateManager {
      * @param collectionId if null, return all collections in callback
      * @param callback called on every change
      */
-    subscribeCertificateCollections(
-        collectionId: string | null,
-        callback: SubscribeCertificateCollectionsCallback
-    ): void {
+    subscribeCollections(collectionId: string | null, callback: SubscribeCertificateCollectionsCallback): void {
         this.adapter.subscribeForeignObjects(SYSTEM_CERTIFICATES_ID);
 
         this.adapter.on('objectChange', (id, obj) => {
@@ -143,7 +147,7 @@ export class CertificateManager {
     /**
      * Returns list of available certificate collection IDs
      */
-    async listCertificateCollectionIds(): Promise<string[]> {
+    async getCollectionIds(): Promise<string[]> {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
             const collections = obj?.native.collections;
