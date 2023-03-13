@@ -1,6 +1,6 @@
 {
   "name": "@iobroker/webserver",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "MIT",
   "engines": {
     "node": ">=14.18.0 < 15 || >= 16.0.0"
@@ -9,6 +9,9 @@
   "author": {
     "name": "Moritz Heusinger",
     "email": "moritz.heusinger@gmail.com"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
