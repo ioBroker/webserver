@@ -14,11 +14,11 @@ interface WebServerOptions {
 interface AdapterConfig {
     /** Collection ID */
     leCollection: string | undefined;
-    /** The name of the public self-signed certificate */
+    /** The name of the public self-signed certificate or custom certificate */
     certPublic: string | undefined;
-    /** The name of the private self-signed certificate */
+    /** The name of the private self-signed certificate or custom certificate */
     certPrivate: string | undefined;
-    /** The name of the chained self-signed certificate */
+    /** The name of the chained self-signed certificate or custom certificate */
     certChained: string | undefined;
 }
 
@@ -49,8 +49,8 @@ export class WebServer {
         }
         const config: AdapterConfig = this.adapter.config as AdapterConfig;
 
-        // Load self-signed certificate for fallback
-        const selfSignedContext = await this.getSelfSignedContext();
+        // Load self-signed or custom certificates for fallback
+        const customCertificatesContext = await this.getCustomCertificatesContext();
 
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
@@ -69,10 +69,10 @@ export class WebServer {
                     'Could not find any certificate collections - check ACME installation or consider installing'
                 );
 
-                if (selfSignedContext) {
-                    this.adapter.log.warn('Falling back to self-signed certificate');
+                if (customCertificatesContext) {
+                    this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
                 } else {
-                    // This really should never happen as selfSigned should always be available
+                    // This really should never happen as customCertificatesContext should always be available
                     this.adapter.log.error(
                         'Could not find self-signed certificate - falling back to insecure http createServer'
                     );
@@ -94,7 +94,7 @@ export class WebServer {
                 contexts = this.buildSecureContexts(collections);
                 if (!Object.keys(contexts).length) {
                     this.adapter.log.warn('Could not find any certificate collections after update');
-                    if (!selfSignedContext) {
+                    if (!customCertificatesContext) {
                         this.adapter.log.error(
                             'No certificate collections or self-signed certificate available - HTTPS requests will now fail'
                         );
@@ -137,15 +137,15 @@ export class WebServer {
                 }
                 if (!context) {
                     // Not found above.
-                    if (selfSignedContext) {
-                        // Use self-signed context
+                    if (customCertificatesContext) {
+                        // Use custom context
                         // Don't spit out warnings here as this may be common occurrence
                         // and one already emitted at startup.
-                        context = selfSignedContext;
+                        context = customCertificatesContext;
                     } else {
                         // See note above about terminate - if that is implemented no need for this check.
                         if (!Object.keys(contexts).length) {
-                            // No selfSignedContext and no contexts - this is very bad!
+                            // No customCertificatesContext and no contexts - this is very bad!
                             this.adapter.log.error(`Could not derive secure context for ${serverName}`);
                         } else {
                             this.adapter.log.warn(
@@ -189,9 +189,9 @@ export class WebServer {
     }
 
     /**
-     * Get the self-signed certificate context
+     * Get the custom certificates context
      */
-    async getSelfSignedContext(): Promise<tls.SecureContext | null> {
+    async getCustomCertificatesContext(): Promise<tls.SecureContext | null> {
         const config: AdapterConfig = this.adapter.config as AdapterConfig;
 
         try {
@@ -200,17 +200,21 @@ export class WebServer {
             const defaultChain = config.certChained || undefined;
 
             // @ts-expect-error types are missing
-            const selfSigned = await this.adapter.getCertificatesAsync(defaultPublic, defaultPrivate, defaultChain);
-            this.adapter.log.debug(`Loaded self signed or custom certificates: ${JSON.stringify(selfSigned)}`);
-            if (selfSigned) {
+            const customCertificates = await this.adapter.getCertificatesAsync(
+                defaultPublic,
+                defaultPrivate,
+                defaultChain
+            );
+            this.adapter.log.debug(`Loaded custom certificates: ${JSON.stringify(customCertificates)}`);
+            if (customCertificates) {
                 // All good
-                return tls.createSecureContext(selfSigned);
+                return tls.createSecureContext(customCertificates);
             }
         } catch (e: any) {
             this.adapter.log.error(e.message);
         }
-        // If we got here then we either failed to load or use self-signed certificate.
-        this.adapter.log.warn('Could not create self-signed context for fallback use');
+        // If we got here then we either failed to load or use self-signed certificate or custom certificates.
+        this.adapter.log.warn('Could not create custom context for fallback use');
         return null;
     }
 }
