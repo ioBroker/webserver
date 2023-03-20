@@ -8,7 +8,18 @@ interface WebServerOptions {
     adapter: ioBroker.Adapter;
     app: http.RequestListener;
     /** if https should be used */
-    secure: boolean;
+    secure: boolean | undefined;
+}
+
+interface AdapterConfig {
+    /** Collection ID */
+    leCollection: string | undefined;
+    /** The name of the public self-signed certificate */
+    certPublic: string | undefined;
+    /** The name of the private self-signed certificate */
+    certPrivate: string | undefined;
+    /** The name of the chained self-signed certificate */
+    certChained: string | undefined;
 }
 
 export class WebServer {
@@ -19,7 +30,7 @@ export class WebServer {
     private readonly certManager: CertificateManager | undefined;
 
     constructor(options: WebServerOptions) {
-        this.secure = options.secure;
+        this.secure = !!options.secure;
         this.adapter = options.adapter;
         this.app = options.app;
         if (this.secure) {
@@ -36,6 +47,7 @@ export class WebServer {
             this.server = http.createServer(this.app);
             return this.server;
         }
+        const config: AdapterConfig = this.adapter.config as AdapterConfig;
 
         // Load self-signed certificate for fallback
         const selfSignedContext = await this.getSelfSignedContext();
@@ -44,7 +56,7 @@ export class WebServer {
         this.adapter.log.debug('Loading all certificate collections...');
 
         let collections: Record<string, CertificateCollection> | null;
-        const collectionId: string = this.adapter.config.leCollection || '';
+        const collectionId: string = config.leCollection || '';
 
         if (collectionId) {
             collections = {
@@ -180,14 +192,16 @@ export class WebServer {
      * Get the self-signed certificate context
      */
     async getSelfSignedContext(): Promise<tls.SecureContext | null> {
+        const config: AdapterConfig = this.adapter.config as AdapterConfig;
+
         try {
-            const defaultPublic = this.adapter.config.certPublic || 'defaultPublic';
-            const defaultPrivate = this.adapter.config.certPrivate || 'defaultPrivate';
-            const defaultChain = this.adapter.config.certChained || undefined;
+            const defaultPublic = config.certPublic || 'defaultPublic';
+            const defaultPrivate = config.certPrivate || 'defaultPrivate';
+            const defaultChain = config.certChained || undefined;
 
             // @ts-expect-error types are missing
             const selfSigned = await this.adapter.getCertificatesAsync(defaultPublic, defaultPrivate, defaultChain);
-            this.adapter.log.debug(`Loaded self signed certificate: ${JSON.stringify(selfSigned)}`);
+            this.adapter.log.debug(`Loaded self signed or custom certificates: ${JSON.stringify(selfSigned)}`);
             if (selfSigned) {
                 // All good
                 return tls.createSecureContext(selfSigned);
