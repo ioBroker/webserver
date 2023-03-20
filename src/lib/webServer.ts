@@ -162,8 +162,12 @@ export class WebServer {
      */
     async getSelfSignedContext(): Promise<tls.SecureContext | null> {
         try {
+            const defaultPublic = this.adapter.config.certPublic || 'defaultPublic';
+            const defaultPrivate = this.adapter.config.certPrivate || 'defaultPrivate';
+            const defaultChain = this.adapter.config.certChained || undefined;
+
             // @ts-expect-error types are missing
-            const selfSigned = (await this.adapter.getCertificatesAsync('defaultPublic', 'defaultPrivate'))[0];
+            const selfSigned = await this.adapter.getCertificatesAsync(defaultPublic, defaultPrivate, defaultChain);
             this.adapter.log.debug(`Loaded self signed certificate: ${JSON.stringify(selfSigned)}`);
             if (selfSigned) {
                 // All good
