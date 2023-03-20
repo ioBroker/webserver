@@ -233,10 +233,12 @@ export class WebServer {
                 defaultPrivate,
                 defaultChain
             );
-            this.adapter.log.debug(`Loaded custom certificates: ${JSON.stringify(customCertificates)}`);
-            if (customCertificates) {
+            this.adapter.log.debug(
+                `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
+            );
+            if (customCertificates && customCertificates[0]) {
                 // All good
-                return tls.createSecureContext(customCertificates);
+                return tls.createSecureContext(customCertificates[0]);
             }
         } catch (e: any) {
             this.adapter.log.error(e.message);
