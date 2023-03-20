@@ -57,7 +57,7 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 0.2.0 (2023-03-20)
 * (bluefox) Rename `Webserver` to `WebServer`
 
 ### 0.1.0 (2023-03-13)
