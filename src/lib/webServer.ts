@@ -16,19 +16,23 @@ export class WebServer {
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
     private readonly app: http.RequestListener;
-    private readonly certManager: CertificateManager;
+    private readonly certManager: CertificateManager | null;
     constructor(options: WebServerOptions) {
         this.secure = options.secure;
         this.adapter = options.adapter;
         this.app = options.app;
-        this.certManager = new CertificateManager({ adapter: options.adapter });
+        if (!this.secure) {
+            this.certManager = new CertificateManager({ adapter: options.adapter });
+        } else {
+            this.certManager = null;
+        }
     }
 
     /**
      * Initialize new https/http server according to configuration, it will be present on `this.server`
      */
     async init(): Promise<http.Server | https.Server> {
-        if (!this.secure) {
+        if (!this.certManager) {
             this.adapter.log.debug('Secure connection not enabled - using http createServer');
             this.server = http.createServer(this.app);
             return this.server;
