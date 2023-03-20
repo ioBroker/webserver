@@ -17,6 +17,7 @@ export class WebServer {
     private readonly secure: boolean;
     private readonly app: http.RequestListener;
     private readonly certManager: CertificateManager;
+
     constructor(options: WebServerOptions) {
         this.secure = options.secure;
         this.adapter = options.adapter;

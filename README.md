@@ -19,7 +19,7 @@ const webServer = new WebServer({ app, adapter, secure: true });
 const server = await webServer.init();
 ```
 
-- Javascript:
+- JavaScript:
 ```javascript
 const { WebServer } = require('@iobroker/webserver');
 
@@ -30,7 +30,7 @@ const server = await webServer.init();
 ```
 
 And so you can use `CertificateManager` that is used in the WebServer already:
-- typescript:
+- TypeScript:
 ```typescript
 import { CertificateManager } from '@iobroker/webserver';
 
@@ -41,8 +41,8 @@ const certManager = new CertificateManager({ adapter })
 const collections = await certManager.getAllCollections();
 ```
 
-- Javascript:
-```typescript
+- JavaScript:
+```javascript
 const { CertificateManager } = require('@iobroker/webserver');
 
 // Not required for server
@@ -61,4 +61,4 @@ const collections = await certManager.getAllCollections();
 * (bluefox) Rename `Webserver` to `WebServer`
 
 ### 0.1.0 (2023-03-13)
-* (foxriver76) initial release
+* (foxriver76) initial release based on https://github.com/ioBroker/ioBroker.js-controller/pull/2104 by @raintonr
