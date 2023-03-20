@@ -133,7 +133,7 @@ export class CertificateManager {
                     // No specific ID requested, return them all
                     callback(null, collections);
                 } else {
-                    if (Array.isArray(collections) && collectionId in collections) {
+                    if (collections[collectionId]) {
                         callback(null, { collectionId: collections[collectionId] });
                     } else {
                         // Can't find requested collection ID, return empty object & error

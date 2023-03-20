@@ -8,7 +8,18 @@ interface WebServerOptions {
     adapter: ioBroker.Adapter;
     app: http.RequestListener;
     /** if https should be used */
-    secure: boolean;
+    secure: boolean | undefined;
+}
+
+interface AdapterConfig {
+    /** Collection ID */
+    leCollection: string | undefined;
+    /** The name of the public self-signed certificate or custom certificate */
+    certPublic: string | undefined;
+    /** The name of the private self-signed certificate or custom certificate */
+    certPrivate: string | undefined;
+    /** The name of the chained self-signed certificate or custom certificate */
+    certChained: string | undefined;
 }
 
 export class WebServer {
@@ -19,7 +30,7 @@ export class WebServer {
     private readonly certManager: CertificateManager | undefined;
 
     constructor(options: WebServerOptions) {
-        this.secure = options.secure;
+        this.secure = !!options.secure;
         this.adapter = options.adapter;
         this.app = options.app;
         if (this.secure) {
@@ -36,49 +47,69 @@ export class WebServer {
             this.server = http.createServer(this.app);
             return this.server;
         }
+        const config: AdapterConfig = this.adapter.config as AdapterConfig;
 
-        // Load self-signed certificate for fallback
-        const selfSignedContext = await this.getSelfSignedContext();
+        // Load self-signed or custom certificates for fallback
+        const customCertificatesContext = await this.getCustomCertificatesContext();
 
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
-        const collections = await this.certManager.getAllCollections();
-        if (!collections || !Object.keys(collections).length) {
-            this.adapter.log.warn(
-                'Could not find any certificate collections - check ACME installation or consider installing'
-            );
 
-            if (selfSignedContext) {
-                this.adapter.log.warn('Falling back to self-signed certificate');
-            } else {
-                // This really should never happen as selfSigned should always be available
-                this.adapter.log.error(
-                    'Could not find self-signed certificate - falling back to insecure http createServer'
+        let collections: Record<string, CertificateCollection> | null;
+        const collectionId: string = config.leCollection || '';
+
+        if (collectionId) {
+            collections = {
+                [collectionId]: await this.certManager.getCollection(collectionId)
+            } as Record<string, CertificateCollection>;
+        } else {
+            collections = await this.certManager.getAllCollections();
+            if (!collections || !Object.keys(collections).length) {
+                this.adapter.log.warn(
+                    'Could not find any certificate collections - check ACME installation or consider installing'
                 );
-                this.server = http.createServer(this.app);
-                return this.server;
-            }
-        }
 
-        if (!collections) {
-            throw new Error('Cannot create secure server: No certificate collection found');
+                if (customCertificatesContext) {
+                    this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
+                } else {
+                    // This really should never happen as customCertificatesContext should always be available
+                    this.adapter.log.error(
+                        'Could not find self-signed certificate - falling back to insecure http createServer'
+                    );
+                    this.server = http.createServer(this.app);
+                    return this.server;
+                }
+            }
+
+            if (!collections) {
+                throw new Error('Cannot create secure server: No certificate collection found');
+            }
         }
 
         let contexts = this.buildSecureContexts(collections);
 
-        this.certManager.subscribeCollections(null, (err, collections) => {
+        this.certManager.subscribeCollections(collectionId || null, (err, collections) => {
             if (!err && collections) {
                 this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
                 contexts = this.buildSecureContexts(collections);
                 if (!Object.keys(contexts).length) {
                     this.adapter.log.warn('Could not find any certificate collections after update');
-                    if (!selfSignedContext) {
+                    if (!customCertificatesContext) {
                         this.adapter.log.error(
                             'No certificate collections or self-signed certificate available - HTTPS requests will now fail'
                         );
                         // This is very bad and perhaps the adapter should also terminate itself?
                     }
                 }
+                // TODO: How new certificates will be used?
+            } else if (err) {
+                this.adapter.log.error(`Error updating certificate collections: ${err}`);
+            } else {
+                this.adapter.log.error(
+                    `${
+                        collectionId ? `Collection "${collectionId}" was` : 'All collections were'
+                    } removed from certificate collections and now we cannot update certificates`
+                );
             }
         });
 
@@ -106,15 +137,15 @@ export class WebServer {
                 }
                 if (!context) {
                     // Not found above.
-                    if (selfSignedContext) {
-                        // Use self-signed context
+                    if (customCertificatesContext) {
+                        // Use custom context
                         // Don't spit out warnings here as this may be common occurrence
                         // and one already emitted at startup.
-                        context = selfSignedContext;
+                        context = customCertificatesContext;
                     } else {
                         // See note above about terminate - if that is implemented no need for this check.
                         if (!Object.keys(contexts).length) {
-                            // No selfSignedContext and no contexts - this is very bad!
+                            // No customCertificatesContext and no contexts - this is very bad!
                             this.adapter.log.error(`Could not derive secure context for ${serverName}`);
                         } else {
                             this.adapter.log.warn(
@@ -158,22 +189,32 @@ export class WebServer {
     }
 
     /**
-     * Get the self-signed certificate context
+     * Get the custom certificates context
      */
-    async getSelfSignedContext(): Promise<tls.SecureContext | null> {
+    async getCustomCertificatesContext(): Promise<tls.SecureContext | null> {
+        const config: AdapterConfig = this.adapter.config as AdapterConfig;
+
         try {
+            const defaultPublic = config.certPublic || 'defaultPublic';
+            const defaultPrivate = config.certPrivate || 'defaultPrivate';
+            const defaultChain = config.certChained || undefined;
+
             // @ts-expect-error types are missing
-            const selfSigned = (await this.adapter.getCertificatesAsync('defaultPublic', 'defaultPrivate'))[0];
-            this.adapter.log.debug(`Loaded self signed certificate: ${JSON.stringify(selfSigned)}`);
-            if (selfSigned) {
+            const customCertificates = await this.adapter.getCertificatesAsync(
+                defaultPublic,
+                defaultPrivate,
+                defaultChain
+            );
+            this.adapter.log.debug(`Loaded custom certificates: ${JSON.stringify(customCertificates)}`);
+            if (customCertificates) {
                 // All good
-                return tls.createSecureContext(selfSigned);
+                return tls.createSecureContext(customCertificates);
             }
         } catch (e: any) {
             this.adapter.log.error(e.message);
         }
-        // If we got here then we either failed to load or use self-signed certificate.
-        this.adapter.log.warn('Could not create self-signed context for fallback use');
+        // If we got here then we either failed to load or use self-signed certificate or custom certificates.
+        this.adapter.log.warn('Could not create custom context for fallback use');
         return null;
     }
 }
