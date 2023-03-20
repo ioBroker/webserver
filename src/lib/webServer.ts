@@ -88,7 +88,7 @@ export class WebServer {
         } else {
             collections = null;
             if (customCertificatesContext) {
-                this.adapter.log.debug('Use self-signed certificates or to custom certificates');
+                this.adapter.log.debug('Use self-signed certificates or custom certificates');
             } else {
                 // This really should never happen as customCertificatesContext should always be available
                 this.adapter.log.error(
