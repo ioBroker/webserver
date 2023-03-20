@@ -16,15 +16,14 @@ export class WebServer {
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
     private readonly app: http.RequestListener;
-    private readonly certManager: CertificateManager | null;
+    private readonly certManager: CertificateManager | undefined;
+
     constructor(options: WebServerOptions) {
         this.secure = options.secure;
         this.adapter = options.adapter;
         this.app = options.app;
-        if (!this.secure) {
+        if (this.secure) {
             this.certManager = new CertificateManager({ adapter: options.adapter });
-        } else {
-            this.certManager = null;
         }
     }
 
