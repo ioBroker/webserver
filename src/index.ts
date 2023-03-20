@@ -1,2 +1,2 @@
-export { Webserver } from './lib/webserver';
+export { WebServer } from './lib/webServer';
 export * from './lib/certificateManager';

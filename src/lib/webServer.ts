@@ -3,7 +3,7 @@ import http from 'http';
 import https from 'https';
 import { CertificateCollection, CertificateManager } from './certificateManager';
 
-interface WebserverOptions {
+interface WebServerOptions {
     /** the ioBroker adapter */
     adapter: ioBroker.Adapter;
     app: http.RequestListener;
@@ -11,13 +11,13 @@ interface WebserverOptions {
     secure: boolean;
 }
 
-export class Webserver {
+export class WebServer {
     private server: http.Server | https.Server | undefined;
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
     private readonly app: http.RequestListener;
     private readonly certManager: CertificateManager;
-    constructor(options: WebserverOptions) {
+    constructor(options: WebServerOptions) {
         this.secure = options.secure;
         this.adapter = options.adapter;
         this.app = options.app;
