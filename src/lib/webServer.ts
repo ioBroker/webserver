@@ -42,31 +42,41 @@ export class WebServer {
 
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
-        const collections = await this.certManager.getAllCollections();
-        if (!collections || !Object.keys(collections).length) {
-            this.adapter.log.warn(
-                'Could not find any certificate collections - check ACME installation or consider installing'
-            );
 
-            if (selfSignedContext) {
-                this.adapter.log.warn('Falling back to self-signed certificate');
-            } else {
-                // This really should never happen as selfSigned should always be available
-                this.adapter.log.error(
-                    'Could not find self-signed certificate - falling back to insecure http createServer'
+        let collections: Record<string, CertificateCollection> | null;
+        const collectionId: string = this.adapter.config.leCollection || '';
+
+        if (collectionId) {
+            collections = {
+                [collectionId]: await this.certManager.getCollection(collectionId)
+            } as Record<string, CertificateCollection>;
+        } else {
+            collections = await this.certManager.getAllCollections();
+            if (!collections || !Object.keys(collections).length) {
+                this.adapter.log.warn(
+                    'Could not find any certificate collections - check ACME installation or consider installing'
                 );
-                this.server = http.createServer(this.app);
-                return this.server;
-            }
-        }
 
-        if (!collections) {
-            throw new Error('Cannot create secure server: No certificate collection found');
+                if (selfSignedContext) {
+                    this.adapter.log.warn('Falling back to self-signed certificate');
+                } else {
+                    // This really should never happen as selfSigned should always be available
+                    this.adapter.log.error(
+                        'Could not find self-signed certificate - falling back to insecure http createServer'
+                    );
+                    this.server = http.createServer(this.app);
+                    return this.server;
+                }
+            }
+
+            if (!collections) {
+                throw new Error('Cannot create secure server: No certificate collection found');
+            }
         }
 
         let contexts = this.buildSecureContexts(collections);
 
-        this.certManager.subscribeCollections(null, (err, collections) => {
+        this.certManager.subscribeCollections(collectionId || null, (err, collections) => {
             if (!err && collections) {
                 this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
                 contexts = this.buildSecureContexts(collections);
@@ -79,6 +89,15 @@ export class WebServer {
                         // This is very bad and perhaps the adapter should also terminate itself?
                     }
                 }
+                // TODO: How new certificates will be used?
+            } else if (err) {
+                this.adapter.log.error(`Error updating certificate collections: ${err}`);
+            } else {
+                this.adapter.log.error(
+                    `${
+                        collectionId ? `Collection "${collectionId}" was` : 'All collections were'
+                    } removed from certificate collections and now we cannot update certificates`
+                );
             }
         });
 
