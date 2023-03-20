@@ -13,7 +13,7 @@ interface WebServerOptions {
 
 interface AdapterConfig {
     /** Collection ID */
-    leCollection: string | undefined;
+    leCollection: string | boolean | undefined;
     /** The name of the public self-signed certificate or custom certificate */
     certPublic: string | undefined;
     /** The name of the private self-signed certificate or custom certificate */
@@ -56,13 +56,14 @@ export class WebServer {
         this.adapter.log.debug('Loading all certificate collections...');
 
         let collections: Record<string, CertificateCollection> | null;
-        const collectionId: string = config.leCollection || '';
+        // true => use all collections, false => do not use collections, string => use collection with this ID
+        const collectionId: string | boolean | undefined = config.leCollection;
 
-        if (collectionId) {
+        if (collectionId && typeof collectionId === 'string') {
             collections = {
                 [collectionId]: await this.certManager.getCollection(collectionId)
             } as Record<string, CertificateCollection>;
-        } else {
+        } else if (collectionId !== false) {
             collections = await this.certManager.getAllCollections();
             if (!collections || !Object.keys(collections).length) {
                 this.adapter.log.warn(
@@ -84,54 +85,79 @@ export class WebServer {
             if (!collections) {
                 throw new Error('Cannot create secure server: No certificate collection found');
             }
+        } else {
+            collections = null;
+            if (customCertificatesContext) {
+                this.adapter.log.debug('Use self-signed certificates or to custom certificates');
+            } else {
+                // This really should never happen as customCertificatesContext should always be available
+                this.adapter.log.error(
+                    'Could not find self-signed certificate - falling back to insecure http createServer'
+                );
+                this.server = http.createServer(this.app);
+                return this.server;
+            }
         }
 
-        let contexts = this.buildSecureContexts(collections);
+        let contexts: Record<string, tls.SecureContext> | undefined;
 
-        this.certManager.subscribeCollections(collectionId || null, (err, collections) => {
-            if (!err && collections) {
-                this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
-                contexts = this.buildSecureContexts(collections);
-                if (!Object.keys(contexts).length) {
-                    this.adapter.log.warn('Could not find any certificate collections after update');
-                    if (!customCertificatesContext) {
+        if (collections) {
+            let contexts = this.buildSecureContexts(collections);
+
+            this.certManager.subscribeCollections(
+                collectionId === true ? null : collectionId || null,
+                (err, collections) => {
+                    if (!err && collections) {
+                        this.adapter.log.silly(`collections update ${JSON.stringify(collections)}`);
+                        contexts = this.buildSecureContexts(collections);
+                        if (!Object.keys(contexts).length) {
+                            this.adapter.log.warn('Could not find any certificate collections after update');
+                            if (!customCertificatesContext) {
+                                this.adapter.log.error(
+                                    'No certificate collections or self-signed certificate available - HTTPS requests will now fail'
+                                );
+                                // This is very bad and perhaps the adapter should also terminate itself?
+                            }
+                        }
+                        // TODO: How new certificates will be used?
+                    } else if (err) {
+                        this.adapter.log.error(`Error updating certificate collections: ${err}`);
+                    } else {
                         this.adapter.log.error(
-                            'No certificate collections or self-signed certificate available - HTTPS requests will now fail'
+                            `${
+                                collectionId ? `Collection "${collectionId}" was` : 'All collections were'
+                            } removed from certificate collections and now we cannot update certificates`
                         );
-                        // This is very bad and perhaps the adapter should also terminate itself?
                     }
                 }
-                // TODO: How new certificates will be used?
-            } else if (err) {
-                this.adapter.log.error(`Error updating certificate collections: ${err}`);
-            } else {
-                this.adapter.log.error(
-                    `${
-                        collectionId ? `Collection "${collectionId}" was` : 'All collections were'
-                    } removed from certificate collections and now we cannot update certificates`
-                );
-            }
-        });
+            );
+        }
 
         const options: https.ServerOptions = {
             SNICallback: (serverName, callback) => {
                 // Find which context to use for this server
                 let context;
-                if (serverName in contexts) {
-                    // Easy - name is explicitly mentioned
-                    this.adapter.log.debug(`Using explicit context for ${serverName}`);
-                    context = contexts[serverName];
-                } else {
-                    // Check for wildcard
-                    const serverParts = serverName.split('.');
-                    if (serverParts.length > 1) {
-                        serverParts.shift();
-                        serverParts.unshift('*');
-                        const wildcard = serverParts.join('.');
-                        if (wildcard in contexts) {
-                            // OK - wildcard found
-                            this.adapter.log.debug(`Using wildcard context for ${serverName}`);
-                            context = contexts[wildcard];
+                if (contexts) {
+                    if (serverName in contexts) {
+                        // Easy - name is explicitly mentioned
+                        if (this.adapter.common.loglevel === 'debug') {
+                            this.adapter.log.debug(`Using explicit context for "${serverName}"`);
+                        }
+                        context = contexts[serverName];
+                    } else {
+                        // Check for wildcard
+                        const serverParts = serverName.split('.');
+                        if (serverParts.length > 1) {
+                            serverParts.shift();
+                            serverParts.unshift('*');
+                            const wildcard = serverParts.join('.');
+                            if (wildcard in contexts) {
+                                // OK - wildcard found
+                                if (this.adapter.common.loglevel === 'debug') {
+                                    this.adapter.log.debug(`Using wildcard context for "${serverName}"`);
+                                }
+                                context = contexts[wildcard];
+                            }
                         }
                     }
                 }
@@ -142,17 +168,19 @@ export class WebServer {
                         // Don't spit out warnings here as this may be common occurrence
                         // and one already emitted at startup.
                         context = customCertificatesContext;
-                    } else {
+                    } else if (contexts) {
                         // See note above about terminate - if that is implemented no need for this check.
                         if (!Object.keys(contexts).length) {
                             // No customCertificatesContext and no contexts - this is very bad!
-                            this.adapter.log.error(`Could not derive secure context for ${serverName}`);
+                            this.adapter.log.error(`Could not derive secure context for "${serverName}"`);
                         } else {
                             this.adapter.log.warn(
-                                `No matching context for ${serverName} - using first certificate collection which will likely cause browser security warnings`
+                                `No matching context for "${serverName}" - using first certificate collection which will likely cause browser security warnings`
                             );
                             context = contexts[Object.keys(contexts)[0]];
                         }
+                    } else {
+                        this.adapter.log.error(`Could not find any certificates for "${serverName}"`);
                     }
                 }
                 callback(null, context);
