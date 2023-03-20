@@ -1,6 +1,6 @@
 {
   "name": "@iobroker/webserver",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "engines": {
     "node": ">=14.18.0 < 15 || >= 16.0.0"
