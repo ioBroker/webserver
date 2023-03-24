@@ -1,6 +1,6 @@
-import tls from 'tls';
+import tls, { SecureContextOptions } from 'tls';
 import http from 'http';
-import https from 'https';
+import https, { ServerOptions } from 'https';
 import { CertificateCollection, CertificateManager } from './certificateManager';
 
 interface WebServerOptions {
@@ -20,6 +20,15 @@ interface AdapterConfig {
     certPrivate: string | undefined;
     /** The name of the chained self-signed certificate or custom certificate */
     certChained: string | undefined;
+}
+
+interface Certificates {
+    /** public certificate */
+    key: string;
+    /** private certificate */
+    cert: string;
+    /** chained certificate */
+    ca: string | undefined;
 }
 
 export class WebServer {
@@ -50,7 +59,7 @@ export class WebServer {
         const config: AdapterConfig = this.adapter.config as AdapterConfig;
 
         // Load self-signed or custom certificates for fallback
-        const customCertificatesContext = await this.getCustomCertificatesContext();
+        const customCertificates = await this.getCustomCertificates();
 
         // Load certificate collections
         this.adapter.log.debug('Loading all certificate collections...');
@@ -70,8 +79,9 @@ export class WebServer {
                     'Could not find any certificate collections - check ACME installation or consider installing'
                 );
 
-                if (customCertificatesContext) {
+                if (customCertificates) {
                     this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
+                    return https.createServer(customCertificates as ServerOptions, this.app);
                 } else {
                     // This really should never happen as customCertificatesContext should always be available
                     this.adapter.log.error(
@@ -86,9 +96,11 @@ export class WebServer {
                 throw new Error('Cannot create secure server: No certificate collection found');
             }
         } else {
+            // fallback to self-signed or custom certificates
             collections = null;
-            if (customCertificatesContext) {
+            if (customCertificates) {
                 this.adapter.log.debug('Use self-signed certificates or custom certificates');
+                return https.createServer(customCertificates as ServerOptions, this.app);
             } else {
                 // This really should never happen as customCertificatesContext should always be available
                 this.adapter.log.error(
@@ -100,6 +112,8 @@ export class WebServer {
         }
 
         let contexts: Record<string, tls.SecureContext> | undefined;
+
+        const customCertificatesContext = tls.createSecureContext(customCertificates as SecureContextOptions);
 
         if (collections) {
             let contexts = this.buildSecureContexts(collections);
@@ -217,42 +231,49 @@ export class WebServer {
     }
 
     /**
+     * Get the custom certificates as text
+     */
+    async getCustomCertificates(): Promise<Certificates | null> {
+        const config: AdapterConfig = this.adapter.config as AdapterConfig;
+        const defaultPublic = config.certPublic || 'defaultPublic';
+        const defaultPrivate = config.certPrivate || 'defaultPrivate';
+        const defaultChain = config.certChained || '';
+
+        // @ts-expect-error types are missing
+        const customCertificates = await this.adapter.getCertificatesAsync(defaultPublic, defaultPrivate, defaultChain);
+        this.adapter.log.debug(
+            `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
+        );
+        if (customCertificates && customCertificates[0]) {
+            if (customCertificates[0].key.endsWith('.pem')) {
+                this.adapter.log.error(
+                    `Cannot load custom certificates. File "${customCertificates[0].key}" does not exists or iobroker user has no rights for it.`
+                );
+            } else if (customCertificates[0].cert.endsWith('.pem')) {
+                this.adapter.log.error(
+                    `Cannot load custom certificates. File "${customCertificates[0].cert}" does not exists or iobroker user has no rights for it.`
+                );
+            } else if (customCertificates[0].ca && customCertificates[0].ca.endsWith('.pem')) {
+                this.adapter.log.error(
+                    `Cannot load custom certificates. File "${customCertificates[0].ca}" does not exists or iobroker user has no rights for it.`
+                );
+            } else {
+                return customCertificates[0];
+            }
+        }
+        return null;
+    }
+
+    /**
      * Get the custom certificates context
      */
     async getCustomCertificatesContext(): Promise<tls.SecureContext | null> {
-        const config: AdapterConfig = this.adapter.config as AdapterConfig;
-
         try {
-            const defaultPublic = config.certPublic || 'defaultPublic';
-            const defaultPrivate = config.certPrivate || 'defaultPrivate';
-            const defaultChain = config.certChained || '';
+            const customCertificates = await this.getCustomCertificates();
 
-            // @ts-expect-error types are missing
-            const customCertificates = await this.adapter.getCertificatesAsync(
-                defaultPublic,
-                defaultPrivate,
-                defaultChain
-            );
-            this.adapter.log.debug(
-                `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
-            );
-            if (customCertificates && customCertificates[0]) {
-                if (customCertificates[0].key.endsWith('.pem')) {
-                    this.adapter.log.error(
-                        `Cannot load custom certificates. File "${customCertificates[0].key}" does not exists or iobroker user has no rights for it.`
-                    );
-                } else if (customCertificates[0].cert.endsWith('.pem')) {
-                    this.adapter.log.error(
-                        `Cannot load custom certificates. File "${customCertificates[0].cert}" does not exists or iobroker user has no rights for it.`
-                    );
-                } else if (customCertificates[0].ca && customCertificates[0].ca.endsWith('.pem')) {
-                    this.adapter.log.error(
-                        `Cannot load custom certificates. File "${customCertificates[0].ca}" does not exists or iobroker user has no rights for it.`
-                    );
-                }
-
+            if (customCertificates) {
                 // All good
-                return tls.createSecureContext(customCertificates[0]);
+                return tls.createSecureContext(customCertificates);
             }
         } catch (e: any) {
             this.adapter.log.error(e.message);

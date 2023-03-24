@@ -57,7 +57,7 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### 0.3.2 (2023-03-24)
+### **WORK IN PROGRESS**
 * (bluefox) Added check of the cert files
 
 ### 0.3.1 (2023-03-20)
