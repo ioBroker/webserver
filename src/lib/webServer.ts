@@ -238,15 +238,15 @@ export class WebServer {
             );
             if (customCertificates && customCertificates[0]) {
                 if (customCertificates[0].key.endsWith('.pem')) {
-                    this.adapter.log.debug(
+                    this.adapter.log.error(
                         `Cannot load custom certificates. File "${customCertificates[0].key}" does not exists or iobroker user has no rights for it.`
                     );
                 } else if (customCertificates[0].cert.endsWith('.pem')) {
-                    this.adapter.log.debug(
+                    this.adapter.log.error(
                         `Cannot load custom certificates. File "${customCertificates[0].cert}" does not exists or iobroker user has no rights for it.`
                     );
                 } else if (customCertificates[0].ca && customCertificates[0].ca.endsWith('.pem')) {
-                    this.adapter.log.debug(
+                    this.adapter.log.error(
                         `Cannot load custom certificates. File "${customCertificates[0].ca}" does not exists or iobroker user has no rights for it.`
                     );
                 }
