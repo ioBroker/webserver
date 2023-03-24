@@ -225,7 +225,7 @@ export class WebServer {
         try {
             const defaultPublic = config.certPublic || 'defaultPublic';
             const defaultPrivate = config.certPrivate || 'defaultPrivate';
-            const defaultChain = config.certChained || undefined;
+            const defaultChain = config.certChained || '';
 
             // @ts-expect-error types are missing
             const customCertificates = await this.adapter.getCertificatesAsync(
@@ -237,6 +237,20 @@ export class WebServer {
                 `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
             );
             if (customCertificates && customCertificates[0]) {
+                if (customCertificates[0].key.endsWith('.pem')) {
+                    this.adapter.log.debug(
+                        `Cannot load custom certificates. File "${customCertificates[0].key}" does not exists or iobroker user has no rights for it.`
+                    );
+                } else if (customCertificates[0].cert.endsWith('.pem')) {
+                    this.adapter.log.debug(
+                        `Cannot load custom certificates. File "${customCertificates[0].cert}" does not exists or iobroker user has no rights for it.`
+                    );
+                } else if (customCertificates[0].ca && customCertificates[0].ca.endsWith('.pem')) {
+                    this.adapter.log.debug(
+                        `Cannot load custom certificates. File "${customCertificates[0].ca}" does not exists or iobroker user has no rights for it.`
+                    );
+                }
+
                 // All good
                 return tls.createSecureContext(customCertificates[0]);
             }
