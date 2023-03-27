@@ -245,20 +245,21 @@ export class WebServer {
             `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
         );
         if (customCertificates && customCertificates[0]) {
-            if (customCertificates[0].key.endsWith('.pem')) {
+            const certs = customCertificates[0];
+            if (certs.key.endsWith('.pem')) {
                 this.adapter.log.error(
-                    `Cannot load custom certificates. File "${customCertificates[0].key}" does not exists or iobroker user has no rights for it.`
+                    `Cannot load custom certificates. File "${certs.key}" does not exists or iobroker user has no rights for it.`
                 );
-            } else if (customCertificates[0].cert.endsWith('.pem')) {
+            } else if (certs.cert.endsWith('.pem')) {
                 this.adapter.log.error(
-                    `Cannot load custom certificates. File "${customCertificates[0].cert}" does not exists or iobroker user has no rights for it.`
+                    `Cannot load custom certificates. File "${certs.cert}" does not exists or iobroker user has no rights for it.`
                 );
-            } else if (customCertificates[0].ca && customCertificates[0].ca.endsWith('.pem')) {
+            } else if (certs.ca && typeof certs.ca === 'string' && certs.ca.endsWith('.pem')) {
                 this.adapter.log.error(
-                    `Cannot load custom certificates. File "${customCertificates[0].ca}" does not exists or iobroker user has no rights for it.`
+                    `Cannot load custom certificates. File "${certs.ca}" does not exists or iobroker user has no rights for it.`
                 );
             } else {
-                return customCertificates[0];
+                return certs;
             }
         }
         return null;
