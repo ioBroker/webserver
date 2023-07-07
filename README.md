@@ -57,6 +57,9 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+* (bluefox) Update packages
+
 ### 0.3.4 (2023-03-27)
 * (bluefox) Corrected small error with CA certificate
 
@@ -67,7 +70,7 @@ const collections = await certManager.getAllCollections();
 * (bluefox) Corrected error with `getCertificatesAsync`
 
 ### 0.3.0 (2023-03-20)
-* (bluefox) Added support of user configured certificates for fallback
+* (bluefox) Added support of user-configured certificates for fallback
 
 ### 0.2.1 (2023-03-20)
 * (bluefox) Rename `Webserver` to `WebServer`

@@ -48,7 +48,7 @@ export class WebServer {
     }
 
     /**
-     * Initialize new https/http server according to configuration, it will be present on `this.server`
+     * Initialize new https/http server, according to configuration, it will be present on `this.server`
      */
     async init(): Promise<http.Server | https.Server> {
         if (!this.certManager) {
@@ -130,7 +130,7 @@ export class WebServer {
                                 this.adapter.log.error(
                                     'No certificate collections or self-signed certificate available - HTTPS requests will now fail'
                                 );
-                                // This is very bad and perhaps the adapter should also terminate itself?
+                                // This is very bad, and perhaps the adapter should also terminate itself?
                             }
                         }
                         // TODO: How new certificates will be used?
@@ -179,11 +179,11 @@ export class WebServer {
                     // Not found above.
                     if (customCertificatesContext) {
                         // Use custom context
-                        // Don't spit out warnings here as this may be common occurrence
+                        // Don't spit out warnings here as this may be a common occurrence
                         // and one already emitted at startup.
                         context = customCertificatesContext;
                     } else if (contexts) {
-                        // See note above about terminate - if that is implemented no need for this check.
+                        // See note above about terminate - if that is implemented, no need for this check.
                         if (!Object.keys(contexts).length) {
                             // No customCertificatesContext and no contexts - this is very bad!
                             this.adapter.log.error(`Could not derive secure context for "${serverName}"`);
@@ -279,7 +279,7 @@ export class WebServer {
         } catch (e: any) {
             this.adapter.log.error(e.message);
         }
-        // If we got here then we either failed to load or use self-signed certificate or custom certificates.
+        // If we got here, then we either failed to load or use self-signed certificate or custom certificates.
         this.adapter.log.warn('Could not create custom context for fallback use');
         return null;
     }

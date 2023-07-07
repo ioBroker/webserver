@@ -112,7 +112,7 @@ export class CertificateManager {
     }
 
     /**
-     * Subscribes certificate collections object and calls callback on every change
+     * Subscribes the certificate collections object and calls callback on every change
      *
      * @param collectionId if null, return all collections in callback
      * @param callback called on every change
