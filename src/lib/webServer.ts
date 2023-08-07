@@ -2,6 +2,7 @@ import tls, { SecureContextOptions } from 'tls';
 import http from 'http';
 import https, { ServerOptions } from 'https';
 import { CertificateCollection, CertificateManager } from './certificateManager';
+import '@iobroker/types';
 
 interface WebServerOptions {
     /** the ioBroker adapter */
@@ -20,15 +21,6 @@ interface AdapterConfig {
     certPrivate: string | undefined;
     /** The name of the chained self-signed certificate or custom certificate */
     certChained: string | undefined;
-}
-
-interface Certificates {
-    /** public certificate */
-    key: string;
-    /** private certificate */
-    cert: string;
-    /** chained certificate */
-    ca: string | undefined;
 }
 
 export class WebServer {
@@ -154,7 +146,7 @@ export class WebServer {
                 if (contexts) {
                     if (serverName in contexts) {
                         // Easy - name is explicitly mentioned
-                        if (this.adapter.common.loglevel === 'debug') {
+                        if (this.adapter.common?.logLevel === 'debug') {
                             this.adapter.log.debug(`Using explicit context for "${serverName}"`);
                         }
                         context = contexts[serverName];
@@ -167,7 +159,7 @@ export class WebServer {
                             const wildcard = serverParts.join('.');
                             if (wildcard in contexts) {
                                 // OK - wildcard found
-                                if (this.adapter.common.loglevel === 'debug') {
+                                if (this.adapter.common?.logLevel === 'debug') {
                                     this.adapter.log.debug(`Using wildcard context for "${serverName}"`);
                                 }
                                 context = contexts[wildcard];
@@ -233,13 +225,12 @@ export class WebServer {
     /**
      * Get the custom certificates as text
      */
-    async getCustomCertificates(): Promise<Certificates | null> {
+    async getCustomCertificates(): Promise<ioBroker.Certificates | null> {
         const config: AdapterConfig = this.adapter.config as AdapterConfig;
         const defaultPublic = config.certPublic || 'defaultPublic';
         const defaultPrivate = config.certPrivate || 'defaultPrivate';
         const defaultChain = config.certChained || '';
 
-        // @ts-expect-error types are missing
         const customCertificates = await this.adapter.getCertificatesAsync(defaultPublic, defaultPrivate, defaultChain);
         this.adapter.log.debug(
             `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
