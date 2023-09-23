@@ -116,7 +116,7 @@ export class WebServer {
         const customCertificatesContext = tls.createSecureContext(customCertificates as SecureContextOptions);
 
         if (collections) {
-            let contexts = this.buildSecureContexts(collections);
+            contexts = this.buildSecureContexts(collections);
 
             this.certManager.subscribeCollections(
                 collectionId === true ? null : collectionId || null,
