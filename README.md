@@ -57,7 +57,7 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 0.3.7 (2023-09-24)
 * (raintonr) Fix contexts for SNICallback ([#3](https://github.com/ioBroker/webserver/issues/3)).
 
 ### 0.3.6 (2023-07-07)
