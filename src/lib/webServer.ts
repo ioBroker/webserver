@@ -133,7 +133,7 @@ export class WebServer {
                                 // This is very bad, and perhaps the adapter should also terminate itself?
                             }
                         }
-                        // TODO: How new certificates will be used?
+                        // contexts is now up to date and will be utilised in SNICallback - nothing more to do.
                     } else if (err) {
                         this.adapter.log.error(`Error updating certificate collections: ${err}`);
                     } else {
