@@ -133,7 +133,7 @@ export class WebServer {
                                 // This is very bad, and perhaps the adapter should also terminate itself?
                             }
                         }
-                        // contexts is now up to date and will be utilised in SNICallback - nothing more to do.
+                        // contexts are now up-to-date and will be utilized in SNICallback - nothing more to do.
                     } else if (err) {
                         this.adapter.log.error(`Error updating certificate collections: ${err}`);
                     } else {
@@ -183,7 +183,7 @@ export class WebServer {
                         // and one already emitted at startup.
                         context = customCertificatesContext;
                     } else if (contexts) {
-                        // See note above about terminate - if that is implemented, no need for this check.
+                        // See the note above about terminating - if that is implemented, no need for this check.
                         if (!Object.keys(contexts).length) {
                             // No customCertificatesContext and no contexts - this is very bad!
                             this.adapter.log.error(`Could not derive secure context for "${serverName}"`);

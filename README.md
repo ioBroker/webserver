@@ -57,6 +57,9 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+* (bluefox) added the security checker
+
 ### 0.3.7 (2023-09-24)
 * (raintonr) Fix contexts for SNICallback ([#3](https://github.com/ioBroker/webserver/issues/3)).
 
@@ -73,7 +76,7 @@ const collections = await certManager.getAllCollections();
 * (bluefox) Corrected error with `getCertificatesAsync`
 
 ### 0.3.0 (2023-03-20)
-* (bluefox) Added support of user-configured certificates for fallback
+* (bluefox) Added support for user-configured certificates for fallback
 
 ### 0.2.1 (2023-03-20)
 * (bluefox) Rename `Webserver` to `WebServer`
