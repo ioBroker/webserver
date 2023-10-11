@@ -38,7 +38,7 @@ function _checkURL(url: string): Promise<null> {
             res.on('end', () => {
                 process.env.NODE_TLS_REJECT_UNAUTHORIZED = oldState;
                 if (res.statusCode === 200) {
-                    reject(new Error(`The URL ${url} reachable from internet without any protection!`));
+                    reject(new Error(`The URL "${url}" is reachable from internet without any protection!`));
                 } else {
                     resolve(null);
                 }
