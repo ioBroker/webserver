@@ -16,7 +16,7 @@ function _getPublicIP(): Promise<string> {
     });
 }
 
-function _checkURL(url: string): Promise<null> {
+function _checkURL(url: string, pattern?: string): Promise<null> {
     return new Promise((resolve, reject) => {
         const oldState = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
         const urlParsed = new URL(url);
@@ -31,13 +31,24 @@ function _checkURL(url: string): Promise<null> {
         };
 
         const req = (url.startsWith('https') ? https : http).get(options, res => {
-            const data = [];
+            const data: Buffer[] = [];
 
-            res.on('data', chunk => data.push(chunk));
+            res.on('data', (chunk: Buffer) => data.push(chunk));
 
             res.on('end', () => {
                 process.env.NODE_TLS_REJECT_UNAUTHORIZED = oldState;
                 if (res.statusCode === 200) {
+                    if (pattern) {
+                        const file = Buffer.concat(data).toString();
+                        if (file.includes(pattern)) {
+                            return reject(
+                                new Error(`The URL "${url}" is reachable from internet without any protection!`)
+                            );
+                        } else {
+                            resolve(null);
+                        }
+                    }
+
                     reject(new Error(`The URL "${url}" is reachable from internet without any protection!`));
                 } else {
                     resolve(null);
