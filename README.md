@@ -57,8 +57,8 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
-* (bluefox) Extend the security checker with the pattern detection 
+### 1.0.2 (2023-10-16)
+* (bluefox) Extend the security checker with the pattern detection
 
 ### 1.0.1 (2023-10-11)
 * (bluefox) Changed the error text of the security checker
