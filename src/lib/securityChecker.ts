@@ -88,7 +88,7 @@ async function checkPublicIP(port: number | string, pattern?: string, customPath
 
     if (publicIP) {
         // check http://publicIP:port
-        await _checkURL(`http://${publicIP}:${port}${customPath}`, pattern, !!customPath)
+        await _checkURL(`http://${publicIP}:${port}${customPath}`, pattern, !!customPath);
 
         // check https://publicIP:port
         await _checkURL(`https://${publicIP}:${port}${customPath}`, pattern, !!customPath);
