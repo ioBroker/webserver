@@ -16,7 +16,7 @@ function _getPublicIP(): Promise<string> {
     });
 }
 
-function _checkURL(url: string, pattern?: string): Promise<null> {
+function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promise<null> {
     return new Promise((resolve, reject) => {
         const oldState = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
         const urlParsed = new URL(url);
@@ -40,7 +40,7 @@ function _checkURL(url: string, pattern?: string): Promise<null> {
                 if (res.statusCode === 200) {
                     if (pattern) {
                         const file = Buffer.concat(data).toString();
-                        if (file.includes(pattern)) {
+                        if ((fullCompare && file === pattern) || file.includes(pattern)) {
                             return reject(
                                 new Error(`The URL "${url}" is reachable from internet without any protection!`)
                             );
@@ -71,7 +71,7 @@ function _checkURL(url: string, pattern?: string): Promise<null> {
  * Checks public IP address of the server and tries to connect to it.
  * Throws error if connection is possible.
  */
-async function checkPublicIP(port: number | string): Promise<void> {
+async function checkPublicIP(port: number | string, pattern?: string, customPath?: string): Promise<void> {
     if (typeof port === 'string') {
         port = parseInt(port, 10);
     }
@@ -82,20 +82,23 @@ async function checkPublicIP(port: number | string): Promise<void> {
     } catch {
         // Ignore. We just don't know the public IP
     }
+    if (customPath && customPath[0] !== '/') {
+        customPath = `/${customPath}`;
+    }
 
     if (publicIP) {
         // check http://publicIP:port
-        await _checkURL(`http://${publicIP}:${port}`);
+        await _checkURL(`http://${publicIP}:${port}${customPath}`, pattern, !!customPath)
 
         // check https://publicIP:port
-        await _checkURL(`https://${publicIP}:${port}`);
+        await _checkURL(`https://${publicIP}:${port}${customPath}`, pattern, !!customPath);
 
         // check http://publicIP:80
         if (port !== 80) {
-            await _checkURL(`http://${publicIP}:80`);
+            await _checkURL(`http://${publicIP}:80${customPath}`, pattern, !!customPath);
         }
         if (port !== 443) {
-            await _checkURL(`https://${publicIP}:443`);
+            await _checkURL(`https://${publicIP}:443${customPath}`, pattern, !!customPath);
         }
     }
 }
