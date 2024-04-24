@@ -65,7 +65,7 @@ export class WebServer {
         this.adapter.log.debug('Loading all certificate collections...');
 
         let collections: Record<string, CertificateCollection> | null;
-        // true => use all collections, false => do not use collections, string => use collection with this ID
+        // true => use all collections, false => do not use collections, string => use the collection with this ID
         const collectionId: string | boolean | undefined = config.leCollection;
 
         if (collectionId && typeof collectionId === 'string') {

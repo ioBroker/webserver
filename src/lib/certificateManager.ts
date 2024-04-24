@@ -67,7 +67,7 @@ export class CertificateManager {
     }
 
     /**
-     * Saves collection of SSL keys, certificates, etc. by ID
+     * Saves a collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      * @param collection object holding all related keys, certificates, etc.
@@ -136,7 +136,7 @@ export class CertificateManager {
                     if (collections[collectionId]) {
                         callback(null, { collectionId: collections[collectionId] });
                     } else {
-                        // Can't find requested collection ID, return empty object & error
+                        // Can't find requested collection ID, return an empty object & error
                         callback(new Error(`Subscribed collection ID ${collectionId} not found`), {});
                     }
                 }
