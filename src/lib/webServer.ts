@@ -1,7 +1,24 @@
-import tls, { SecureContextOptions } from 'tls';
-import http from 'http';
-import https, { ServerOptions } from 'https';
+import tls, { SecureContextOptions } from 'node:tls';
+import http from 'node:http';
+import https, { ServerOptions } from 'node:https';
 import { CertificateCollection, CertificateManager } from './certificateManager';
+
+export interface WebServerAccessControl {
+    /** Access-Control-Allow-Headers */
+    accessControlAllowHeaders?: string;
+    /** Access-Control-Allow-Methods */
+    accessControlAllowMethods?: string;
+    /** Access-Control-Allow-Origin */
+    accessControlAllowOrigin?: string;
+    /** Access-Control-Expose-Headers */
+    accessControlExposeHeaders?: string;
+    /** Access-Control-Request-Headers */
+    accessControlRequestHeaders?: string;
+    /** Access-Control-Request-Method */
+    accessControlRequestMethod?: string;
+    /** Access-Control-Allow-Credentials */
+    accessControlAllowCredentials?: boolean;
+}
 
 interface WebServerOptions {
     /** the ioBroker adapter */
@@ -9,6 +26,8 @@ interface WebServerOptions {
     app: http.RequestListener;
     /** if https should be used */
     secure: boolean | undefined;
+    /** access control options */
+    accessControl?: WebServerAccessControl;
 }
 
 interface AdapterConfig {
@@ -35,8 +54,10 @@ export class WebServer {
     private server: http.Server | https.Server | undefined;
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
-    private readonly app: http.RequestListener;
+    private app: http.RequestListener;
+    private originalApp: http.RequestListener | undefined;
     private readonly certManager: CertificateManager | undefined;
+    private readonly accessControl: WebServerAccessControl | undefined;
 
     constructor(options: WebServerOptions) {
         this.secure = !!options.secure;
@@ -44,6 +65,53 @@ export class WebServer {
         this.app = options.app;
         if (this.secure) {
             this.certManager = new CertificateManager({ adapter: options.adapter });
+        }
+        this.accessControl = options.accessControl;
+    }
+
+    private initAccessControl(): void {
+        if (
+            this.accessControl &&
+            (this.accessControl.accessControlAllowCredentials !== undefined ||
+                this.accessControl.accessControlAllowHeaders ||
+                this.accessControl.accessControlAllowMethods ||
+                this.accessControl.accessControlAllowOrigin ||
+                this.accessControl.accessControlExposeHeaders ||
+                this.accessControl.accessControlRequestHeaders ||
+                this.accessControl.accessControlRequestMethod)
+        ) {
+            this.originalApp = this.app;
+            this.app = (req, res) => {
+                if (this.accessControl) {
+                    if (this.accessControl.accessControlAllowCredentials !== undefined) {
+                        res.setHeader(
+                            'Access-Control-Allow-Credentials',
+                            this.accessControl.accessControlAllowCredentials ? 'true' : 'false'
+                        );
+                    }
+                    if (this.accessControl.accessControlAllowHeaders) {
+                        res.setHeader('Access-Control-Allow-Headers', this.accessControl.accessControlAllowHeaders);
+                    }
+                    if (this.accessControl.accessControlAllowMethods) {
+                        res.setHeader('Access-Control-Allow-Methods', this.accessControl.accessControlAllowMethods);
+                    }
+                    if (this.accessControl.accessControlAllowOrigin) {
+                        res.setHeader('Access-Control-Allow-Origin', this.accessControl.accessControlAllowOrigin);
+                    }
+                    if (this.accessControl.accessControlExposeHeaders) {
+                        res.setHeader('Access-Control-Expose-Headers', this.accessControl.accessControlExposeHeaders);
+                    }
+                    if (this.accessControl.accessControlRequestHeaders) {
+                        res.setHeader('Access-Control-Request-Headers', this.accessControl.accessControlRequestHeaders);
+                    }
+                    if (this.accessControl.accessControlRequestMethod) {
+                        res.setHeader('Access-Control-Request-Method', this.accessControl.accessControlRequestMethod);
+                    }
+                }
+
+                // @ts-expect-error this.originalApp is set
+                return this.originalApp(req, res);
+            };
         }
     }
 
@@ -53,6 +121,7 @@ export class WebServer {
     async init(): Promise<http.Server | https.Server> {
         if (!this.certManager) {
             this.adapter.log.debug('Secure connection not enabled - using http createServer');
+            this.initAccessControl();
             this.server = http.createServer(this.app);
             return this.server;
         }
@@ -81,13 +150,17 @@ export class WebServer {
 
                 if (customCertificates) {
                     this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
-                    return https.createServer(customCertificates as ServerOptions, this.app);
+                    this.initAccessControl();
+                    this.server = https.createServer(customCertificates as ServerOptions, this.app);
+                    return this.server;
                 } else {
                     // This really should never happen as customCertificatesContext should always be available
                     this.adapter.log.error(
                         'Could not find self-signed certificate - falling back to insecure http createServer'
                     );
+                    this.initAccessControl();
                     this.server = http.createServer(this.app);
+
                     return this.server;
                 }
             }
@@ -100,13 +173,17 @@ export class WebServer {
             collections = null;
             if (customCertificates) {
                 this.adapter.log.debug('Use self-signed certificates or custom certificates');
-                return https.createServer(customCertificates as ServerOptions, this.app);
+                this.initAccessControl();
+                this.server = https.createServer(customCertificates as ServerOptions, this.app);
+                return this.server;
             } else {
                 // This really should never happen as customCertificatesContext should always be available
                 this.adapter.log.error(
                     'Could not find self-signed certificate - falling back to insecure http createServer'
                 );
+                this.initAccessControl();
                 this.server = http.createServer(this.app);
+
                 return this.server;
             }
         }

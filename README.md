@@ -57,6 +57,9 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+* (bluefox) Added access control options for server
+
 ### 1.0.3 (2023-10-16)
 * (bluefox) Extend the security checker with the pattern detection and custom URL
 
