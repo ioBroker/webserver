@@ -7,7 +7,7 @@ certificate handling using the ioBroker certificates.
 ## How-To
 Install via `npm i @iobroker/webserver`.
 
-Use the webserver in your ioBroker adapter as following:
+Use the webserver in your ioBroker adapter as the following:
 
 - TypeScript: 
 ```typescript
