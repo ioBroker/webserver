@@ -65,7 +65,7 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 1.0.5 (2024-09-14)
 
 -   (bluefox) Added access control options for server
 -   (bluefox) Used `@iobroker/eslint-config` for linting
