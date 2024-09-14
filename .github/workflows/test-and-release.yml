@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Use Node.js 16
+      - name: Use Node.js 20
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 20
 
       - name: NPM install
         run: npm i
@@ -33,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
      - uses: actions/checkout@v3
-     - name: Use Node.js 16
+     - name: Use Node.js 20
        uses: actions/setup-node@v3
        with:
-         node-version: 16
+         node-version: 20
 
      - name: Install dependencies
        run: npm i
@@ -64,7 +64,7 @@ jobs:
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v1
         with:
-          node-version: 16.x
+          node-version: 20.x
 
       - name: Install dependencies
         run: npm i
