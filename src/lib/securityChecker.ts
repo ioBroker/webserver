@@ -12,7 +12,7 @@ function _getPublicIP(): Promise<string> {
 
                 res.on('end', () => resolve(Buffer.concat(data).toString()));
             })
-            .on('error', err => reject(err.message));
+            .on('error', err => reject(new Error(err.message)));
     });
 }
 
@@ -27,7 +27,7 @@ function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promis
 
             method: 'GET', // client uses this
             path: urlParsed.pathname, // client uses this
-            timeout: 2000 // timeout in 2 seconds if the server does not respond in time
+            timeout: 2000, // timeout in 2 seconds if the server does not respond in time
         };
 
         const req = (url.startsWith('https') ? https : http).get(options, res => {
@@ -42,7 +42,7 @@ function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promis
                         const file = Buffer.concat(data).toString();
                         if ((fullCompare && file === pattern) || file.includes(pattern)) {
                             return reject(
-                                new Error(`The URL "${url}" is reachable from internet without any protection!`)
+                                new Error(`The URL "${url}" is reachable from internet without any protection!`),
                             );
                         } else {
                             resolve(null);

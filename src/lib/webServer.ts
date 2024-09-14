@@ -1,7 +1,7 @@
-import tls, { SecureContextOptions } from 'node:tls';
+import tls, { type SecureContextOptions } from 'node:tls';
 import http from 'node:http';
-import https, { ServerOptions } from 'node:https';
-import { CertificateCollection, CertificateManager } from './certificateManager';
+import https, { type ServerOptions } from 'node:https';
+import { type CertificateCollection, CertificateManager } from './certificateManager';
 
 export interface WebServerAccessControl {
     /** Access-Control-Allow-Headers */
@@ -47,7 +47,7 @@ interface Certificates {
     /** private certificate */
     cert: string;
     /** chained certificate */
-    ca: string | undefined;
+    ca?: string;
 }
 
 export class WebServer {
@@ -86,7 +86,7 @@ export class WebServer {
                     if (this.accessControl.accessControlAllowCredentials !== undefined) {
                         res.setHeader(
                             'Access-Control-Allow-Credentials',
-                            this.accessControl.accessControlAllowCredentials ? 'true' : 'false'
+                            this.accessControl.accessControlAllowCredentials ? 'true' : 'false',
                         );
                     }
                     if (this.accessControl.accessControlAllowHeaders) {
@@ -139,13 +139,13 @@ export class WebServer {
 
         if (collectionId && typeof collectionId === 'string') {
             collections = {
-                [collectionId]: await this.certManager.getCollection(collectionId)
+                [collectionId]: await this.certManager.getCollection(collectionId),
             } as Record<string, CertificateCollection>;
         } else if (collectionId !== false) {
             collections = await this.certManager.getAllCollections();
             if (!collections || !Object.keys(collections).length) {
                 this.adapter.log.warn(
-                    'Could not find any certificate collections - check ACME installation or consider installing'
+                    'Could not find any certificate collections - check ACME installation or consider installing',
                 );
 
                 if (customCertificates) {
@@ -156,7 +156,7 @@ export class WebServer {
                 } else {
                     // This really should never happen as customCertificatesContext should always be available
                     this.adapter.log.error(
-                        'Could not find self-signed certificate - falling back to insecure http createServer'
+                        'Could not find self-signed certificate - falling back to insecure http createServer',
                     );
                     this.initAccessControl();
                     this.server = http.createServer(this.app);
@@ -179,7 +179,7 @@ export class WebServer {
             } else {
                 // This really should never happen as customCertificatesContext should always be available
                 this.adapter.log.error(
-                    'Could not find self-signed certificate - falling back to insecure http createServer'
+                    'Could not find self-signed certificate - falling back to insecure http createServer',
                 );
                 this.initAccessControl();
                 this.server = http.createServer(this.app);
@@ -205,22 +205,22 @@ export class WebServer {
                             this.adapter.log.warn('Could not find any certificate collections after update');
                             if (!customCertificatesContext) {
                                 this.adapter.log.error(
-                                    'No certificate collections or self-signed certificate available - HTTPS requests will now fail'
+                                    'No certificate collections or self-signed certificate available - HTTPS requests will now fail',
                                 );
                                 // This is very bad, and perhaps the adapter should also terminate itself?
                             }
                         }
                         // contexts are now up-to-date and will be utilized in SNICallback - nothing more to do.
                     } else if (err) {
-                        this.adapter.log.error(`Error updating certificate collections: ${err}`);
+                        this.adapter.log.error(`Error updating certificate collections: ${err.toString()}`);
                     } else {
                         this.adapter.log.error(
                             `${
                                 collectionId ? `Collection "${collectionId}" was` : 'All collections were'
-                            } removed from certificate collections and now we cannot update certificates`
+                            } removed from certificate collections and now we cannot update certificates`,
                         );
                     }
-                }
+                },
             );
         }
 
@@ -231,7 +231,7 @@ export class WebServer {
                 if (contexts) {
                     if (serverName in contexts) {
                         // Easy - name is explicitly mentioned
-                        if (this.adapter.common.loglevel === 'debug') {
+                        if (this.adapter.common?.loglevel === 'debug') {
                             this.adapter.log.debug(`Using explicit context for "${serverName}"`);
                         }
                         context = contexts[serverName];
@@ -244,7 +244,7 @@ export class WebServer {
                             const wildcard = serverParts.join('.');
                             if (wildcard in contexts) {
                                 // OK - wildcard found
-                                if (this.adapter.common.loglevel === 'debug') {
+                                if (this.adapter.common?.loglevel === 'debug') {
                                     this.adapter.log.debug(`Using wildcard context for "${serverName}"`);
                                 }
                                 context = contexts[wildcard];
@@ -266,7 +266,7 @@ export class WebServer {
                             this.adapter.log.error(`Could not derive secure context for "${serverName}"`);
                         } else {
                             this.adapter.log.warn(
-                                `No matching context for "${serverName}" - using first certificate collection which will likely cause browser security warnings`
+                                `No matching context for "${serverName}" - using first certificate collection which will likely cause browser security warnings`,
                             );
                             context = contexts[Object.keys(contexts)[0]];
                         }
@@ -275,7 +275,7 @@ export class WebServer {
                     }
                 }
                 callback(null, context);
-            }
+            },
         };
 
         this.adapter.log.debug('Using https createServer');
@@ -285,6 +285,7 @@ export class WebServer {
 
     /**
      * Build secure context from certificate collections
+     *
      * @param collections the certificate collections
      */
     private buildSecureContexts(collections: Record<string, CertificateCollection>): Record<string, tls.SecureContext> {
@@ -295,7 +296,7 @@ export class WebServer {
             for (const [collectionId, collection] of Object.entries(collections)) {
                 const context = tls.createSecureContext({
                     key: collection.key,
-                    cert: collection.cert
+                    cert: collection.cert,
                 });
 
                 for (const domain of collection.domains) {
@@ -316,24 +317,23 @@ export class WebServer {
         const defaultPrivate = config.certPrivate || 'defaultPrivate';
         const defaultChain = config.certChained || '';
 
-        // @ts-expect-error types are missing
         const customCertificates = await this.adapter.getCertificatesAsync(defaultPublic, defaultPrivate, defaultChain);
         this.adapter.log.debug(
-            `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`
+            `Loaded custom certificates: ${JSON.stringify(customCertificates && customCertificates[0])}`,
         );
         if (customCertificates && customCertificates[0]) {
             const certs = customCertificates[0];
             if (certs.key.endsWith('.pem')) {
                 this.adapter.log.error(
-                    `Cannot load custom certificates. File "${certs.key}" does not exists or iobroker user has no rights for it.`
+                    `Cannot load custom certificates. File "${certs.key}" does not exists or iobroker user has no rights for it.`,
                 );
             } else if (certs.cert.endsWith('.pem')) {
                 this.adapter.log.error(
-                    `Cannot load custom certificates. File "${certs.cert}" does not exists or iobroker user has no rights for it.`
+                    `Cannot load custom certificates. File "${certs.cert}" does not exists or iobroker user has no rights for it.`,
                 );
             } else if (certs.ca && typeof certs.ca === 'string' && certs.ca.endsWith('.pem')) {
                 this.adapter.log.error(
-                    `Cannot load custom certificates. File "${certs.ca}" does not exists or iobroker user has no rights for it.`
+                    `Cannot load custom certificates. File "${certs.ca}" does not exists or iobroker user has no rights for it.`,
                 );
             } else {
                 return certs;

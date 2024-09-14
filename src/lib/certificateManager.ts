@@ -20,7 +20,7 @@ export interface CertificateCollection {
 
 export type SubscribeCertificateCollectionsCallback = (
     err: Error | null,
-    collections?: Record<string, CertificateCollection>
+    collections?: Record<string, CertificateCollection>,
 ) => void;
 
 const SYSTEM_CERTIFICATES_ID = 'system.certificates';
@@ -54,7 +54,7 @@ export class CertificateManager {
      * @param collectionId id of the collection to filter for
      */
     async getCollection(
-        collectionId: string
+        collectionId: string,
     ): Promise<CertificateCollection | Record<string, CertificateCollection> | null> {
         try {
             const collections = await this.getAllCollections();
@@ -81,9 +81,9 @@ export class CertificateManager {
         await this.adapter.extendForeignObjectAsync(SYSTEM_CERTIFICATES_ID, {
             native: {
                 collections: {
-                    [collectionId]: collection
-                }
-            }
+                    [collectionId]: collection,
+                },
+            },
         });
     }
 

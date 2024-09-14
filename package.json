@@ -1,49 +1,44 @@
 {
-  "name": "@iobroker/webserver",
-  "version": "1.0.4",
-  "license": "MIT",
-  "engines": {
-    "node": ">=14.18.0 < 15 || >= 16.0.0"
-  },
-  "homepage": "https://github.com/ioBroker/webserver",
-  "author": {
-    "name": "Moritz Heusinger",
-    "email": "moritz.heusinger@gmail.com"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "build": "tsc -b tsconfig.build.json",
-    "lint": "eslint src",
-    "release": "release-script",
-    "release-patch": "release-script patch --yes",
-    "release-minor": "release-script minor --yes",
-    "release-major": "release-script major --yes",
-    "update-packages": "ncu --upgrade"
-  },
-  "bugs": {
-    "url": "https://github.com/ioBroker/webserver/issues"
-  },
-  "files": [
-    "build/",
-    "LICENSE"
-  ],
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
-  "devDependencies": {
-    "@alcalzone/release-script": "^3.8.0",
-    "@alcalzone/release-script-plugin-license": "^3.7.0",
-    "@iobroker/types": "^6.0.11",
-    "@types/node": "^22.5.4",
-    "@typescript-eslint/eslint-plugin": "^8.4.0",
-    "@typescript-eslint/parser": "^8.4.0",
-    "chai": "^4.5.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-prettier": "^5.2.1",
-    "mocha": "^10.7.3",
-    "prettier": "^3.3.3",
-    "typescript": "^5.5.4"
-  }
+    "name": "@iobroker/webserver",
+    "version": "1.0.4",
+    "license": "MIT",
+    "engines": {
+        "node": ">=14.18.0 < 15 || >= 16.0.0"
+    },
+    "homepage": "https://github.com/ioBroker/webserver",
+    "author": {
+        "name": "Moritz Heusinger",
+        "email": "moritz.heusinger@gmail.com"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "lint": "eslint src",
+        "release": "release-script",
+        "release-patch": "release-script patch --yes",
+        "release-minor": "release-script minor --yes",
+        "release-major": "release-script major --yes",
+        "update-packages": "ncu --upgrade"
+    },
+    "bugs": {
+        "url": "https://github.com/ioBroker/webserver/issues"
+    },
+    "files": [
+        "build/",
+        "LICENSE"
+    ],
+    "main": "build/index.js",
+    "types": "build/index.d.ts",
+    "devDependencies": {
+        "@alcalzone/release-script": "^3.8.0",
+        "@alcalzone/release-script-plugin-license": "^3.7.0",
+        "@iobroker/eslint-config": "^0.1.5",
+        "@iobroker/types": "^6.0.11",
+        "@types/node": "^22.5.5",
+        "chai": "^4.5.0",
+        "mocha": "^10.7.3",
+        "typescript": "^5.6.2"
+    }
 }
