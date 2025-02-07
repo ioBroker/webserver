@@ -44,9 +44,8 @@ function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promis
                             return reject(
                                 new Error(`The URL "${url}" is reachable from internet without any protection!`),
                             );
-                        } else {
-                            resolve(null);
                         }
+                        resolve(null);
                     }
 
                     reject(new Error(`The URL "${url}" is reachable from internet without any protection!`));

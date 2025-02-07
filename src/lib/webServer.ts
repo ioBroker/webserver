@@ -148,21 +148,18 @@ export class WebServer {
                     'Could not find any certificate collections - check ACME installation or consider installing',
                 );
 
+                this.initAccessControl();
                 if (customCertificates) {
                     this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
-                    this.initAccessControl();
                     this.server = https.createServer(customCertificates as ServerOptions, this.app);
-                    return this.server;
                 } else {
                     // This really should never happen as customCertificatesContext should always be available
                     this.adapter.log.error(
                         'Could not find self-signed certificate - falling back to insecure http createServer',
                     );
-                    this.initAccessControl();
                     this.server = http.createServer(this.app);
-
-                    return this.server;
                 }
+                return this.server;
             }
 
             if (!collections) {
