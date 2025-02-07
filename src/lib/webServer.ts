@@ -23,7 +23,7 @@ export interface WebServerAccessControl {
 interface WebServerOptions {
     /** the ioBroker adapter */
     adapter: ioBroker.Adapter;
-    app: http.RequestListener;
+    app?: http.RequestListener | null;
     /** if https should be used */
     secure: boolean | undefined;
     /** access control options */
@@ -54,7 +54,7 @@ export class WebServer {
     private server: http.Server | https.Server | undefined;
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
-    private app: http.RequestListener;
+    private app?: http.RequestListener;
     private originalApp: http.RequestListener | undefined;
     private readonly certManager: CertificateManager | undefined;
     private readonly accessControl: WebServerAccessControl | undefined;
@@ -62,7 +62,7 @@ export class WebServer {
     constructor(options: WebServerOptions) {
         this.secure = !!options.secure;
         this.adapter = options.adapter;
-        this.app = options.app;
+        this.app = options.app || undefined;
         if (this.secure) {
             this.certManager = new CertificateManager({ adapter: options.adapter });
         }
@@ -171,21 +171,20 @@ export class WebServer {
         } else {
             // fallback to self-signed or custom certificates
             collections = null;
+            this.initAccessControl();
+
             if (customCertificates) {
                 this.adapter.log.debug('Use self-signed certificates or custom certificates');
-                this.initAccessControl();
                 this.server = https.createServer(customCertificates as ServerOptions, this.app);
-                return this.server;
             } else {
                 // This really should never happen as customCertificatesContext should always be available
                 this.adapter.log.error(
                     'Could not find self-signed certificate - falling back to insecure http createServer',
                 );
-                this.initAccessControl();
                 this.server = http.createServer(this.app);
-
-                return this.server;
             }
+
+            return this.server;
         }
 
         let contexts: Record<string, tls.SecureContext> | undefined;

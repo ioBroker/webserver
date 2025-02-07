@@ -65,22 +65,26 @@ const collections = await certManager.getAllCollections();
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+
+-   (@GermanBluefox) Updated packages and typing
+
 ### 1.0.6 (2024-09-14)
 
--   (bluefox) Added access control options for server
--   (bluefox) Used `@iobroker/eslint-config` for linting
+-   (@GermanBluefox) Added access control options for server
+-   (@GermanBluefox) Used `@iobroker/eslint-config` for linting
 
 ### 1.0.3 (2023-10-16)
 
--   (bluefox) Extend the security checker with the pattern detection and custom URL
+-   (@GermanBluefox) Extend the security checker with the pattern detection and custom URL
 
 ### 1.0.1 (2023-10-11)
 
--   (bluefox) Changed the error text of the security checker
+-   (@GermanBluefox) Changed the error text of the security checker
 
 ### 1.0.0 (2023-10-11)
 
--   (bluefox) added the security checker
+-   (@GermanBluefox) added the security checker
 
 ### 0.3.7 (2023-09-24)
 
@@ -88,27 +92,27 @@ const collections = await certManager.getAllCollections();
 
 ### 0.3.6 (2023-07-07)
 
--   (bluefox) Update packages
+-   (@GermanBluefox) Update packages
 
 ### 0.3.4 (2023-03-27)
 
--   (bluefox) Corrected small error with CA certificate
+-   (@GermanBluefox) Corrected small error with CA certificate
 
 ### 0.3.3 (2023-03-24)
 
--   (bluefox) Added check of the cert files
+-   (@GermanBluefox) Added check of the cert files
 
 ### 0.3.1 (2023-03-20)
 
--   (bluefox) Corrected error with `getCertificatesAsync`
+-   (@GermanBluefox) Corrected error with `getCertificatesAsync`
 
 ### 0.3.0 (2023-03-20)
 
--   (bluefox) Added support for user-configured certificates for fallback
+-   (@GermanBluefox) Added support for user-configured certificates for fallback
 
 ### 0.2.1 (2023-03-20)
 
--   (bluefox) Rename `Webserver` to `WebServer`
+-   (@GermanBluefox) Rename `Webserver` to `WebServer`
 
 ### 0.1.0 (2023-03-13)
 
