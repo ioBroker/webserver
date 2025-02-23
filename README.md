@@ -59,12 +59,54 @@ const certManager = new CertificateManager({ adapter });
 const collections = await certManager.getAllCollections();
 ```
 
+## OAuth2 support
+You can activate the OAuth2 support for the webserver. To do this, add the following code after the server is initialized:
+
+```typescript
+// ... initialization of the webserver        
+this.webServer.app.use(cookieParser());
+this.webServer.app.use(bodyParser.urlencoded({ extended: true }));
+this.webServer.app.use(bodyParser.json());
+this.webServer.app.use(bodyParser.text());
+
+// Install oauth2 server (Only this line is required)
+createOAuth2Server(this, { app: this.webServer.app, secure: this.config.secure, withSession: true });
+
+// Old authentication method
+this.webServer.app.use(
+    session({
+        secret: this.secret,
+        saveUninitialized: true,
+        resave: true,
+        cookie: { maxAge: (parseInt(this.config.ttl as string, 10) || 3600) * 1000, httpOnly: false }, // default TTL
+        // @ts-expect-error missing typing
+        store: this.store!,
+    }),
+);
+```
+
+If you want to completely disable old authentication method, the code should looks like:
+```typescript
+// ... initialization of the webserver        
+this.webServer.app.use(cookieParser());
+this.webServer.app.use(bodyParser.urlencoded({ extended: true }));
+this.webServer.app.use(bodyParser.json());
+this.webServer.app.use(bodyParser.text());
+
+// Install oauth2 server (Only this line is required)
+createOAuth2Server(this, { app: this.webServer.app, secure: this.config.secure });
+```
+
 ## Changelog
 
 <!--
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+
+-   (@GermanBluefox) Added support for OAuth2 authentication
+
 ### 1.0.8 (2025-02-07)
 
 -   (@GermanBluefox) Updated packages and typing

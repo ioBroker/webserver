@@ -20,7 +20,7 @@
     "release-patch": "release-script patch --yes",
     "release-minor": "release-script minor --yes",
     "release-major": "release-script major --yes",
-    "update-packages": "ncu --upgrade"
+    "update-packages": "npx -y npm-check-updates --upgrade"
   },
   "bugs": {
     "url": "https://github.com/ioBroker/webserver/issues"
@@ -31,12 +31,17 @@
   ],
   "main": "build/index.js",
   "types": "build/index.d.ts",
+  "dependencies": {
+    "oauth2-server": "^3.1.1"
+  },
   "devDependencies": {
     "@alcalzone/release-script": "^3.8.0",
     "@alcalzone/release-script-plugin-license": "^3.7.0",
     "@iobroker/eslint-config": "^1.0.0",
     "@iobroker/types": "^7.0.6",
-    "@types/node": "^22.13.1",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.5",
+    "@types/oauth2-server": "^3.0.18",
     "chai": "^4.5.0",
     "mocha": "^11.1.0",
     "typescript": "^5.7.3"
