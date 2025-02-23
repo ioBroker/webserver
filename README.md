@@ -97,6 +97,49 @@ this.webServer.app.use(bodyParser.text());
 createOAuth2Server(this, { app: this.webServer.app, secure: this.config.secure });
 ```
 
+Login with OAuth2 is available under `/oauth/token` URL:
+
+```http
+POST /oauth/token HTTP/1.1
+Host: IP:PORT
+Content-Type: application/x-www-form-urlencoded
+Data: grant_type=password&username=<user>&password=<password>&client_id=ioBroker&stayloggedin=<false/true>
+```
+`stayloggedin=true` means that the token will be stored in the browser and will be used for the next requests and is optional.
+
+The answer is like:
+```json
+{
+  "accessToken": "21f89e3eee32d3af08a71c1cc44ec72e0e3014a9",
+  "accessTokenExpiresAt": "2025-02-23T11:39:32.208Z",
+  "refreshToken": "66d35faa5d53ca8242cfe57367210e76b7ffded7",
+  "refreshTokenExpiresAt": "2025-03-25T10:39:32.208Z",
+  "user": {
+    "id": "admin"
+  },
+  "client": {
+    "id": "ioBroker",
+    "grants": [
+      "password",
+      "refresh_token"
+    ],
+    "accessTokenLifetime": 3600,
+    "refreshTokenLifetime": 2592000
+  }
+}
+```          
+
+Refresh token is available under `/oauth/token` URL:
+
+```http
+POST /oauth/token HTTP/1.1
+Host: IP:PORT
+Content-Type: application/x-www-form-urlencoded
+Data: grant_type=refresh_token&refresh_token=<REFRESH_TOKEN>&client_id=ioBroker&stayloggedin=<false/true>
+```
+
+The answer is the same as for the login but with new tokens.
+
 ## Changelog
 
 <!--
