@@ -35,6 +35,17 @@ export interface CookieOptions {
     partitioned?: boolean | undefined;
 }
 
+/**
+ * Create an OAuth2 server on the given Express app.
+ *
+ * @param adapter The adapter instance
+ * @param options Options
+ * @param options.app The Express app
+ * @param options.secure Whether the connection is secure (default: false)
+ * @param options.accessLifetime Access token expiration in seconds (default: 1 hour)
+ * @param options.refreshLifetime Refresh token expiration in seconds (default: 30 days)
+ * @param options.loginPage The login page URL (default: empty and someone else will handle the login)
+ */
 export function createOAuth2Server(
     adapter: ioBroker.Adapter,
     options: {
@@ -42,7 +53,7 @@ export function createOAuth2Server(
         secure?: boolean;
         accessLifetime?: number;
         refreshLifetime?: number;
-        withSession?: boolean;
+        loginPage?: string;
     },
 ): void {
     const model = new OAuth2Model(adapter, {
@@ -90,10 +101,10 @@ export function createOAuth2Server(
         res.clearCookie('access_token');
         res.clearCookie('refresh_token');
         // the answer will be sent in other middleware
-        if (options.withSession) {
-            next();
+        if (options.loginPage) {
+            res.redirect(options.loginPage);
         } else {
-            res.redirect('/login/index.html');
+            next();
         }
     });
 
