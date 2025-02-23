@@ -44,7 +44,7 @@ export interface CookieOptions {
  * @param options.secure Whether the connection is secure (default: false)
  * @param options.accessLifetime Access token expiration in seconds (default: 1 hour)
  * @param options.refreshLifetime Refresh token expiration in seconds (default: 30 days)
- * @param options.loginPage The login page URL (default: empty and someone else will handle the login)
+ * @param options.loginPage The login page URL (default: empty and someone else will handle the login). It could be a function too
  */
 export function createOAuth2Server(
     adapter: ioBroker.Adapter,
@@ -53,7 +53,7 @@ export function createOAuth2Server(
         secure?: boolean;
         accessLifetime?: number;
         refreshLifetime?: number;
-        loginPage?: string;
+        loginPage?: string | ((req: Request) => string);
     },
 ): void {
     const model = new OAuth2Model(adapter, {
@@ -97,12 +97,16 @@ export function createOAuth2Server(
             });
     });
 
-    options.app.get('/logout', (_req: Request, res: Response, next: NextFunction): void => {
+    options.app.get('/logout', (req: Request, res: Response, next: NextFunction): void => {
         res.clearCookie('access_token');
         res.clearCookie('refresh_token');
         // the answer will be sent in other middleware
         if (options.loginPage) {
-            res.redirect(options.loginPage);
+            if (typeof options.loginPage === 'function') {
+                res.redirect(options.loginPage(req));
+            } else {
+                res.redirect(options.loginPage);
+            }
         } else {
             next();
         }

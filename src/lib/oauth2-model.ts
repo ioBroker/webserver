@@ -31,6 +31,7 @@ export class OAuth2Model implements RefreshTokenModel {
     private readonly refreshTokenLifetime: number = 60 * 60 * 24 * 30; // 30 days
     private adapter: ioBroker.Adapter;
     private readonly secure: boolean;
+    private bruteForce: Record<string, { errors: number; time: number }> = {};
 
     /**
      * Create a OAuth2model
@@ -184,13 +185,52 @@ export class OAuth2Model implements RefreshTokenModel {
      * Get user.
      */
     getUser = async (username: string, password: string): Promise<User | Falsey> => {
+        const now = Date.now();
+        if (this.bruteForce[username]?.errors > 4) {
+            let minutes = now - this.bruteForce[username].time;
+            if (this.bruteForce[username].errors < 7) {
+                if (now - this.bruteForce[username].time < 60_000) {
+                    minutes = 1;
+                } else {
+                    minutes = 0;
+                }
+            } else if (this.bruteForce[username].errors < 10) {
+                if (now - this.bruteForce[username].time < 180_000) {
+                    minutes = Math.ceil((180_000 - minutes) / 60000);
+                } else {
+                    minutes = 0;
+                }
+            } else if (this.bruteForce[username].errors < 15) {
+                if (now - this.bruteForce[username].time < 600_000) {
+                    minutes = Math.ceil((60_0000 - minutes) / 60_000);
+                } else {
+                    minutes = 0;
+                }
+            } else if (now - this.bruteForce[username].time < 3_600_000) {
+                minutes = Math.ceil((3_600_000 - minutes) / 60_000);
+            } else {
+                minutes = 0;
+            }
+
+            if (minutes) {
+                this.adapter.log.warn(`Too many errors for "${username}". Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`)
+                return null;
+            }
+        }
+
         const result = await new Promise<{ success: boolean; user: string }>(resolve =>
             this.adapter.checkPassword(username, password, (success: boolean, user: string): void =>
                 resolve({ success, user }),
             ),
         );
         if (!result.success) {
+            this.bruteForce[username] = this.bruteForce[username] || { errors: 0 };
+            this.bruteForce[username].time = new Date().getTime();
+            this.bruteForce[username].errors++;
             return null;
+        }
+        if (this.bruteForce[username]) {
+            delete this.bruteForce[username];
         }
         return {
             id: result.user.replace(/^system\.user\./, ''),
