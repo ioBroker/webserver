@@ -213,7 +213,9 @@ export class OAuth2Model implements RefreshTokenModel {
             }
 
             if (minutes) {
-                this.adapter.log.warn(`Too many errors for "${username}". Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`)
+                this.adapter.log.warn(
+                    `Too many errors for "${username}". Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`,
+                );
                 return null;
             }
         }

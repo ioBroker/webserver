@@ -19,17 +19,9 @@ export interface CookieOptions {
     secure?: boolean | undefined;
     /** A synchronous function used for cookie value encoding. Defaults to encodeURIComponent. */
     encode?: ((val: string) => string) | undefined;
-    /**
-     * Value of the “SameSite” Set-Cookie attribute.
-     *
-     * @link https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-00#section-4.1.1.
-     */
+    /** Value of the “SameSite” Set-Cookie attribute. */
     sameSite?: boolean | 'lax' | 'strict' | 'none' | undefined;
-    /**
-     * Value of the “Priority” Set-Cookie attribute.
-     *
-     * @link https://datatracker.ietf.org/doc/html/draft-west-cookie-priority-00#section-4.3
-     */
+    /** Value of the “Priority” Set-Cookie attribute. */
     priority?: 'low' | 'medium' | 'high';
     /** Marks the cookie to use partitioned storage. */
     partitioned?: boolean | undefined;
