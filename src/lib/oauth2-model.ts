@@ -96,6 +96,14 @@ export class OAuth2Model implements RefreshTokenModel {
         const _req: Request & { user?: string } = req;
         // Check if the user is logged in
         if (!_req.user) {
+            // If authenticated by token in query like /blabla?token=ACCESS_TOKEN
+            if (_req.query.token) {
+                const token = await this.getAccessToken(_req.query.token as string);
+                if (token) {
+                    _req.user = token.user.id;
+                }
+            }
+            // If authenticated by Authorization header {headers: authorization: "Bearer ACCESS_TOKEN"}
             if (_req.headers?.authorization?.startsWith('Bearer ')) {
                 const token = await this.getAccessToken(_req.headers.authorization.substring(7));
                 if (token) {
@@ -105,48 +113,13 @@ export class OAuth2Model implements RefreshTokenModel {
                     return;
                 }
             } else if (_req.headers.cookie) {
+                // If authenticated by cookie, like {headers: {cookie: "access_token=ACCESS_TOKEN"}}
                 const cookies = _req.headers.cookie.split(';').map(c => c.trim().split('='));
                 const tokenCookie = cookies.find(c => c[0] === 'access_token');
                 if (tokenCookie) {
                     const token = await this.getAccessToken(tokenCookie[1]);
                     if (token) {
                         _req.user = token.user.id;
-                    } else {
-                        // Try to get the refresh token
-                        const refreshTokenCookie = cookies.find(c => c[0] === 'refresh_token');
-                        if (refreshTokenCookie) {
-                            const refreshToken = await this.getRefreshToken(refreshTokenCookie[1]);
-                            if (refreshToken) {
-                                // Update the access token
-                                const newToken = await this.saveToken(
-                                    {
-                                        accessToken: generateRandomToken(),
-                                        accessTokenExpiresAt: new Date(Date.now() + this.accessTokenLifetime * 1000),
-                                        refreshToken: generateRandomToken(),
-                                        refreshTokenExpiresAt: new Date(Date.now() + this.refreshTokenLifetime * 1000),
-                                    },
-                                    refreshToken.client,
-                                    refreshToken.user,
-                                );
-
-                                if (newToken) {
-                                    // Set the new access token in cookie
-                                    res.cookie('refresh_token', newToken.refreshToken, {
-                                        httpOnly: true, // Makes the cookie inaccessible to client-side JavaScript
-                                        secure: this.secure, // Only send cookie over HTTPS
-                                        expires: newToken.refreshTokenExpiresAt, // Cookie will expire in X hour
-                                        sameSite: 'strict', // Prevents the browser from sending this cookie along with cross-site requests (optional)
-                                    });
-                                    res.cookie('access_token', newToken.accessToken, {
-                                        httpOnly: true, // Makes the cookie inaccessible to client-side JavaScript
-                                        secure: this.secure, // Only send cookie over HTTPS
-                                        expires: newToken.refreshTokenExpiresAt, // Cookie will expire in X hour
-                                        sameSite: 'strict', // Prevents the browser from sending this cookie along with cross-site requests (optional)
-                                    });
-                                    _req.user = newToken.user.id;
-                                }
-                            }
-                        }
                     }
                 }
             }
