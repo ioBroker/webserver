@@ -104,7 +104,7 @@ export class OAuth2Model implements RefreshTokenModel {
                 }
             }
             // If authenticated by Authorization header {headers: authorization: "Bearer ACCESS_TOKEN"}
-            if (_req.headers?.authorization?.startsWith('Bearer ')) {
+            if (!_req.user && _req.headers?.authorization?.startsWith('Bearer ')) {
                 const token = await this.getAccessToken(_req.headers.authorization.substring(7));
                 if (token) {
                     _req.user = token.user.id;
@@ -112,7 +112,7 @@ export class OAuth2Model implements RefreshTokenModel {
                     res.status(401).send('Unauthorized');
                     return;
                 }
-            } else if (_req.headers.cookie) {
+            } else if (!_req.user && _req.headers.cookie) {
                 // If authenticated by cookie, like {headers: {cookie: "access_token=ACCESS_TOKEN"}}
                 const cookies = _req.headers.cookie.split(';').map(c => c.trim().split('='));
                 const tokenCookie = cookies.find(c => c[0] === 'access_token');
