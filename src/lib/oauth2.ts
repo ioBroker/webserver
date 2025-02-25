@@ -90,7 +90,7 @@ export function createOAuth2Server(
     });
 
     options.app.get('/logout', (req: Request, res: Response, next: NextFunction): void => {
-        let accessToken = req.headers.cookie?.split(';').find((c) => c.trim().startsWith('access_token='));
+        let accessToken = req.headers.cookie?.split(';').find(c => c.trim().startsWith('access_token='));
         if (accessToken) {
             accessToken = accessToken.split('=')[1];
         } else if (req.query.token) {
@@ -100,13 +100,13 @@ export function createOAuth2Server(
         }
 
         if (accessToken) {
-            adapter.getSession(`a:${accessToken}`, (obj: InternalStorageToken): void => {
+            void adapter.getSession(`a:${accessToken}`, (obj: InternalStorageToken): void => {
                 res.clearCookie('access_token');
                 res.clearCookie('refresh_token');
 
                 if (obj) {
-                    adapter.destroySession(`a:${obj.aToken}`);
-                    adapter.destroySession(`r:${obj.rToken}`);
+                    void adapter.destroySession(`a:${obj.aToken}`);
+                    void adapter.destroySession(`r:${obj.rToken}`);
                 }
                 // the answer will be sent in other middleware
                 if (options.loginPage) {

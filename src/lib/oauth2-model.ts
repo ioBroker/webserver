@@ -10,7 +10,6 @@ import {
 } from 'oauth2-server';
 
 import type { NextFunction, Request, Response } from 'express';
-import { randomBytes, createHash } from 'node:crypto';
 
 // We must save both tokens, as by logout we must revoke both
 export interface InternalStorageToken {
@@ -24,11 +23,6 @@ export interface InternalStorageToken {
     rExp: number;
     /** User ID */
     user: string;
-}
-
-function generateRandomToken(): string {
-    const bytes = randomBytes(256);
-    return createHash('sha1').update(bytes).digest('hex');
 }
 
 // ----- OAuth2Model Class -----
