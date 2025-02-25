@@ -12,9 +12,17 @@ import {
 import type { NextFunction, Request, Response } from 'express';
 import { randomBytes, createHash } from 'node:crypto';
 
-interface InternalToken {
-    token: string;
-    exp: number;
+// We must save both tokens, as by logout we must revoke both
+export interface InternalStorageToken {
+    /** Access token */
+    aToken: string;
+    /** According refresh token */
+    rToken: string;
+    /** Expiration time of the access token */
+    aExp: number;
+    /** Expiration time of the refresh token */
+    rExp: number;
+    /** User ID */
     user: string;
 }
 
@@ -57,7 +65,7 @@ export class OAuth2Model implements RefreshTokenModel {
     }
 
     getAccessToken = async (bearerToken: string): Promise<Token | Falsey> => {
-        const token = await new Promise<InternalToken | null>(resolve =>
+        const token = await new Promise<InternalStorageToken | null>(resolve =>
             this.adapter.getSession(`a:${bearerToken}`, resolve),
         );
         if (!token) {
@@ -65,8 +73,8 @@ export class OAuth2Model implements RefreshTokenModel {
         }
 
         return {
-            accessToken: token.token,
-            accessTokenExpiresAt: new Date(token.exp),
+            accessToken: token.aToken,
+            accessTokenExpiresAt: new Date(token.aExp),
             client: {
                 id: 'ioBroker',
                 grants: ['password', 'refresh_token'],
@@ -132,7 +140,7 @@ export class OAuth2Model implements RefreshTokenModel {
      * Get refresh token.
      */
     getRefreshToken = async (bearerToken: string): Promise<RefreshToken | Falsey> => {
-        const token = await new Promise<InternalToken | null>(resolve =>
+        const token = await new Promise<InternalStorageToken | null>(resolve =>
             this.adapter.getSession(`r:${bearerToken}`, resolve),
         );
         if (!token) {
@@ -140,8 +148,8 @@ export class OAuth2Model implements RefreshTokenModel {
         }
 
         return {
-            refreshToken: token.token,
-            refreshTokenExpiresAt: new Date(token.exp),
+            refreshToken: token.rToken,
+            refreshTokenExpiresAt: new Date(token.rExp),
             client: {
                 id: 'ioBroker',
                 grants: ['password', 'refresh_token'],
@@ -228,25 +236,22 @@ export class OAuth2Model implements RefreshTokenModel {
         const accessTokenTtl = Math.floor((token.accessTokenExpiresAt!.getTime() - Date.now()) / 1000);
         const refreshTokenTtl = Math.floor((token.refreshTokenExpiresAt!.getTime() - Date.now()) / 1000);
 
-        const internalAccessToken: InternalToken = {
-            token: token.accessToken,
-            exp: token.accessTokenExpiresAt!.getTime(),
-            user: user.id,
-        };
-        const internalRefreshToken: InternalToken = {
-            token: token.refreshToken!,
-            exp: token.refreshTokenExpiresAt!.getTime(),
+        const internalToken: InternalStorageToken = {
+            aToken: token.accessToken,
+            aExp: token.accessTokenExpiresAt!.getTime(),
+            rToken: token.refreshToken!,
+            rExp: token.refreshTokenExpiresAt!.getTime(),
             user: user.id,
         };
 
         await Promise.all([
             new Promise<void>((resolve, reject) =>
-                this.adapter.setSession(`a:${data.accessToken}`, accessTokenTtl, internalAccessToken, err =>
+                this.adapter.setSession(`a:${data.accessToken}`, accessTokenTtl, internalToken, err =>
                     err ? reject(err) : resolve(),
                 ),
             ),
             new Promise<void>((resolve, reject) =>
-                this.adapter.setSession(`r:${data.refreshToken!}`, refreshTokenTtl, internalRefreshToken, err =>
+                this.adapter.setSession(`r:${data.refreshToken!}`, refreshTokenTtl, internalToken, err =>
                     err ? reject(err) : resolve(),
                 ),
             ),
@@ -258,7 +263,8 @@ export class OAuth2Model implements RefreshTokenModel {
     revokeToken = async (token: RefreshToken | Token): Promise<boolean> => {
         if (token.refreshToken) {
             await this.adapter.destroySession(`r:${token.refreshToken}`);
-        } else if (token.accessToken) {
+        }
+        if (token.accessToken) {
             await this.adapter.destroySession(`a:${token.accessToken}`);
         }
         return true;

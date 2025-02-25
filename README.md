@@ -146,7 +146,7 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### 1.1.4 (2025-02-24)
+### **WORK IN PROGRESS**
 
 -   (@GermanBluefox) Added support for OAuth2 authentication with brute force
 

@@ -1,6 +1,6 @@
 import type { Request, Response, Express, NextFunction } from 'express';
 import OAuth2Server, { Request as OAuthRequest, Response as OAuthResponse, type Token } from 'oauth2-server';
-import { OAuth2Model } from './oauth2-model';
+import { type InternalStorageToken, OAuth2Model } from './oauth2-model';
 
 export interface CookieOptions {
     /** Convenient option for setting the expiry time relative to the current time in **milliseconds**. */
@@ -90,17 +90,49 @@ export function createOAuth2Server(
     });
 
     options.app.get('/logout', (req: Request, res: Response, next: NextFunction): void => {
-        res.clearCookie('access_token');
-        res.clearCookie('refresh_token');
-        // the answer will be sent in other middleware
-        if (options.loginPage) {
-            if (typeof options.loginPage === 'function') {
-                res.redirect(options.loginPage(req));
-            } else {
-                res.redirect(options.loginPage);
-            }
+        let accessToken = req.headers.cookie?.split(';').find((c) => c.trim().startsWith('access_token='));
+        if (accessToken) {
+            accessToken = accessToken.split('=')[1];
+        } else if (req.query.token) {
+            accessToken = req.query.token as string;
+        } else if (req.headers.authorization?.startsWith('Bearer ')) {
+            accessToken = req.headers.authorization.substring(7);
+        }
+
+        if (accessToken) {
+            adapter.getSession(`a:${accessToken}`, (obj: InternalStorageToken): void => {
+                res.clearCookie('access_token');
+                res.clearCookie('refresh_token');
+
+                if (obj) {
+                    adapter.destroySession(`a:${obj.aToken}`);
+                    adapter.destroySession(`r:${obj.rToken}`);
+                }
+                // the answer will be sent in other middleware
+                if (options.loginPage) {
+                    if (typeof options.loginPage === 'function') {
+                        res.redirect(options.loginPage(req));
+                    } else {
+                        res.redirect(options.loginPage);
+                    }
+                } else {
+                    next();
+                }
+            });
         } else {
-            next();
+            res.clearCookie('access_token');
+            res.clearCookie('refresh_token');
+
+            // the answer will be sent in other middleware
+            if (options.loginPage) {
+                if (typeof options.loginPage === 'function') {
+                    res.redirect(options.loginPage(req));
+                } else {
+                    res.redirect(options.loginPage);
+                }
+            } else {
+                next();
+            }
         }
     });
 
