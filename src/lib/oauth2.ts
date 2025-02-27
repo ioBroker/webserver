@@ -82,7 +82,13 @@ export function createOAuth2Server(
                 // Store the access token in a cookie named "access_token"
                 res.cookie('access_token', token.accessToken, cookieOptions);
 
-                res.json(token);
+                res.json({
+                    access_token: token.accessToken,
+                    token_type: 'Bearer',
+                    expires_in: Math.floor((token.accessTokenExpiresAt!.getTime() - Date.now()) / 1000),
+                    refresh_token: token.refreshToken,
+                    refresh_token_expires_in: Math.floor((token.refreshTokenExpiresAt!.getTime() - Date.now()) / 1000),
+                });
             })
             .catch((err: any): void => {
                 res.status(err.code || 500).json(err);

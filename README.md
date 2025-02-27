@@ -110,22 +110,11 @@ Data: grant_type=password&username=<user>&password=<password>&client_id=ioBroker
 The answer is like:
 ```json
 {
-  "accessToken": "21f89e3eee32d3af08a71c1cc44ec72e0e3014a9",
-  "accessTokenExpiresAt": "2025-02-23T11:39:32.208Z",
-  "refreshToken": "66d35faa5d53ca8242cfe57367210e76b7ffded7",
-  "refreshTokenExpiresAt": "2025-03-25T10:39:32.208Z",
-  "user": {
-    "id": "admin"
-  },
-  "client": {
-    "id": "ioBroker",
-    "grants": [
-      "password",
-      "refresh_token"
-    ],
-    "accessTokenLifetime": 3600,
-    "refreshTokenLifetime": 2592000
-  }
+    "access_token": "21f89e3eee32d3af08a71c1cc44ec72e0e3014a9",
+    "expires_in": 3600,
+    "refresh_token": "66d35faa5d53ca8242cfe57367210e76b7ffded7",
+    "refresh_token_expires_in": "600000",
+    "token_type": "Bearer"
 }
 ```          
 
@@ -146,7 +135,7 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### 1.1.6 (2025-02-25)
+### **WORK IN PROGRESS**
 
 -   (@GermanBluefox) Added support for OAuth2 authentication with brute force
 
