@@ -102,7 +102,6 @@ export function createOAuth2Server(
         if (accessToken) {
             void adapter.getSession(`a:${accessToken}`, (obj: InternalStorageToken): void => {
                 res.clearCookie('access_token');
-                res.clearCookie('refresh_token');
 
                 if (obj) {
                     void adapter.destroySession(`a:${obj.aToken}`);
@@ -121,7 +120,6 @@ export function createOAuth2Server(
             });
         } else {
             res.clearCookie('access_token');
-            res.clearCookie('refresh_token');
 
             // the answer will be sent in other middleware
             if (options.loginPage) {
