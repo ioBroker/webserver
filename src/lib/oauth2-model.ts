@@ -204,6 +204,9 @@ export class OAuth2Model implements RefreshTokenModel {
             this.bruteForce[username] = this.bruteForce[username] || { errors: 0 };
             this.bruteForce[username].time = new Date().getTime();
             this.bruteForce[username].errors++;
+            this.adapter.log.warn(
+                `Invalid password for ${username}. Wrong attempts: ${this.bruteForce[username].errors}`,
+            );
             return null;
         }
         if (this.bruteForce[username]) {

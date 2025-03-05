@@ -135,6 +135,11 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+
+-   (@GermanBluefox) Added the log output for invalid password in OAuth2
+-   (@GermanBluefox) A minimal Node.js version is 16 (Not breaking, as no one uses node 14)
+
 ### 1.1.7 (2025-02-27)
 
 -   (@GermanBluefox) Added support for OAuth2 authentication with brute force
