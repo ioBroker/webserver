@@ -49,7 +49,6 @@ export function createOAuth2Server(
     },
 ): OAuth2Model {
     const model = new OAuth2Model(adapter, {
-        secure: options.secure,
         accessLifetime: options.accessLifetime,
         refreshLifeTime: options.refreshLifetime,
     });

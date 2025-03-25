@@ -33,7 +33,6 @@ export class OAuth2Model implements RefreshTokenModel {
     private readonly accessTokenLifetime: number = 60 * 60; // 1 hour
     private readonly refreshTokenLifetime: number = 60 * 60 * 24 * 30; // 30 days
     private adapter: ioBroker.Adapter;
-    private readonly secure: boolean;
     private bruteForce: Record<string, { errors: number; time: number }> = {};
 
     /**
@@ -43,18 +42,15 @@ export class OAuth2Model implements RefreshTokenModel {
      * @param options Options
      * @param options.accessLifetime Access token expiration in seconds
      * @param options.refreshLifeTime Refresh token expiration in seconds
-     * @param options.secure Secured connection
      */
     constructor(
         adapter: ioBroker.Adapter,
         options?: {
             accessLifetime?: number;
             refreshLifeTime?: number;
-            secure?: boolean;
         },
     ) {
         this.adapter = adapter;
-        this.secure = options?.secure || false;
         this.accessTokenLifetime = options?.accessLifetime || this.accessTokenLifetime;
         this.refreshTokenLifetime = options?.refreshLifeTime || this.refreshTokenLifetime;
     }
@@ -294,8 +290,9 @@ export class OAuth2Model implements RefreshTokenModel {
                     rToken: '',
                     rExp: 0,
                     user:
-                        (this.adapter.config as Record<string, Record<string, string>>).allowInternalAccess?.[adapter] ||
-                        'admin',
+                        (this.adapter.config as Record<string, Record<string, string>>).allowInternalAccess?.[
+                            adapter
+                        ] || 'admin',
                 };
 
                 this.adapter.setSession(`a:${internalToken.aToken}`, 3_600, internalToken, err => {
