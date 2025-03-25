@@ -274,7 +274,7 @@ export class OAuth2Model implements RefreshTokenModel {
      *
      * @param obj Message object
      */
-    async processMessage(obj: ioBroker.Message): Promise<void> {
+    processMessage(obj: ioBroker.Message): boolean {
         if (obj.command === 'internalToken') {
             // Make this option adjustable
             const adapter = obj.from.replace('system.adapter.', '').replace(/\.\d+$/, '');
@@ -295,7 +295,7 @@ export class OAuth2Model implements RefreshTokenModel {
                         ] || 'admin',
                 };
 
-                this.adapter.setSession(`a:${internalToken.aToken}`, 3_600, internalToken, err => {
+                void this.adapter.setSession(`a:${internalToken.aToken}`, 3_600, internalToken, err => {
                     if (obj.callback) {
                         this.adapter.sendTo(
                             obj.from,
@@ -319,6 +319,8 @@ export class OAuth2Model implements RefreshTokenModel {
                     this.adapter.sendTo(obj.from, obj.command, { error: 'not allowed' }, obj.callback);
                 }
             }
+            return true;
         }
+        return false;
     }
 }
