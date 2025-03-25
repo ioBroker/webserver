@@ -135,7 +135,7 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 1.2.3 (2025-03-25)
 -   (@GermanBluefox) Added the possibility to give tokens for internal use (like node-red)
 
 ### 1.2.0 (2025-03-05)
