@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
     type Client,
     type Falsey,
@@ -270,4 +271,57 @@ export class OAuth2Model implements RefreshTokenModel {
     verifyScope = (_token: Token, _scope: Scope): Promise<boolean> => {
         return Promise.resolve(true);
     };
+
+    /**
+     * Issue a new access token for internal usage.
+     * E.g., node-red needs to access objects for Select ID dialog
+     *
+     * @param obj Message object
+     */
+    async processMessage(obj: ioBroker.Message): Promise<void> {
+        if (obj.command === 'internalToken') {
+            // Make this option adjustable
+            const adapter = obj.from.replace('system.adapter.', '').replace(/\.\d+$/, '');
+            if (
+                (this.adapter.config as Record<string, Record<string, string>>).allowInternalAccess?.[adapter] ||
+                !(this.adapter.config as Record<string, Record<string, string>>).allowInternalAccess
+            ) {
+                const accessTokenTtl = Date.now() + 3_600_000;
+
+                const internalToken: InternalStorageToken = {
+                    aToken: Buffer.from(randomBytes(32)).toString('base64'),
+                    aExp: accessTokenTtl,
+                    rToken: '',
+                    rExp: 0,
+                    user:
+                        (this.adapter.config as Record<string, Record<string, string>>).allowInternalAccess?.[adapter] ||
+                        'admin',
+                };
+
+                this.adapter.setSession(`a:${internalToken.aToken}`, 3_600, internalToken, err => {
+                    if (obj.callback) {
+                        this.adapter.sendTo(
+                            obj.from,
+                            obj.command,
+                            err
+                                ? { error: err }
+                                : {
+                                      access_token: internalToken.aToken,
+                                      token_type: 'Bearer',
+                                      expires_in: 3_600,
+                                      refresh_token: '',
+                                      refresh_token_expires_in: 0,
+                                  },
+                            obj.callback,
+                        );
+                    }
+                });
+            } else {
+                this.adapter.log.warn(`Unknown message ${JSON.stringify(obj)}`);
+                if (obj.callback) {
+                    this.adapter.sendTo(obj.from, obj.command, { error: 'not allowed' }, obj.callback);
+                }
+            }
+        }
+    }
 }

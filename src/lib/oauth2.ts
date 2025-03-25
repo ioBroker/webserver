@@ -47,7 +47,7 @@ export function createOAuth2Server(
         refreshLifetime?: number;
         loginPage?: string | ((req: Request) => string);
     },
-): void {
+): OAuth2Model {
     const model = new OAuth2Model(adapter, {
         secure: options.secure,
         accessLifetime: options.accessLifetime,
@@ -141,4 +141,6 @@ export function createOAuth2Server(
     });
 
     options.app.use(model.authorize);
+
+    return model;
 }
