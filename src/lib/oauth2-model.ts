@@ -32,6 +32,7 @@ export class OAuth2Model implements RefreshTokenModel {
     // Token lifetimes in seconds
     private readonly accessTokenLifetime: number = 60 * 60; // 1 hour
     private readonly refreshTokenLifetime: number = 60 * 60 * 24 * 30; // 30 days
+    private readonly noBasicAuth: boolean; // Do not allow basic auth
     private adapter: ioBroker.Adapter;
     private bruteForce: Record<string, { errors: number; time: number }> = {};
 
@@ -42,17 +43,20 @@ export class OAuth2Model implements RefreshTokenModel {
      * @param options Options
      * @param options.accessLifetime Access token expiration in seconds
      * @param options.refreshLifeTime Refresh token expiration in seconds
+     * @param options.noBasicAuth Do not allow basic authentication
      */
     constructor(
         adapter: ioBroker.Adapter,
         options?: {
             accessLifetime?: number;
             refreshLifeTime?: number;
+            noBasicAuth?: boolean;
         },
     ) {
         this.adapter = adapter;
-        this.accessTokenLifetime = options?.accessLifetime || this.accessTokenLifetime;
-        this.refreshTokenLifetime = options?.refreshLifeTime || this.refreshTokenLifetime;
+        this.accessTokenLifetime ||= options?.accessLifetime || this.accessTokenLifetime;
+        this.refreshTokenLifetime ||= options?.refreshLifeTime || this.refreshTokenLifetime;
+        this.noBasicAuth = options?.noBasicAuth || false;
     }
 
     getAccessToken = async (bearerToken: string): Promise<Token | Falsey> => {
@@ -111,7 +115,9 @@ export class OAuth2Model implements RefreshTokenModel {
                     res.status(401).send('Unauthorized');
                     return;
                 }
-            } else if (!_req.user && _req.headers.cookie) {
+            }
+            // If authentication by access token in cookie
+            if (!_req.user && _req.headers?.cookie) {
                 // If authenticated by cookie, like {headers: {cookie: "access_token=ACCESS_TOKEN"}}
                 const cookies = _req.headers.cookie.split(';').map(c => c.trim().split('='));
                 const tokenCookie = cookies.find(c => c[0] === 'access_token');
@@ -120,6 +126,31 @@ export class OAuth2Model implements RefreshTokenModel {
                     if (token) {
                         _req.user = token.user.id;
                     }
+                }
+            }
+            if (!_req.user && _req.query.user && _req.query.pass) {
+                // If authenticated by query like /blabla?user=USER&pass=PASS
+                const user = await this.getUser(_req.query.user as string, _req.query.pass as string);
+                if (user) {
+                    _req.user = user.id;
+                } else {
+                    res.status(401).send('Unauthorized');
+                    return;
+                }
+            }
+            if (!_req.user && !this.noBasicAuth && _req.headers?.authorization?.startsWith('Basic ')) {
+                // If authenticated by Basic Auth
+                const base64 = _req.headers.authorization.substring(6);
+                const data = Buffer.from(base64, 'base64').toString('utf8');
+                const parts = data.split(':');
+                const username = parts.shift() || '';
+                const pass = parts.join(':');
+                const user = await this.getUser(username, pass);
+                if (user) {
+                    _req.user = user.id;
+                } else {
+                    res.status(401).send('Unauthorized');
+                    return;
                 }
             }
         }
