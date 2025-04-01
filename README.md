@@ -135,7 +135,7 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### 1.2.5 (2025-04-01)
+### **WORK IN PROGRESS**
 
 - (@GermanBluefox) Changed the order of authentications. Basic authentication will be checked as the last one.
 - (@GermanBluefox) Added the setting to disable basic authentication

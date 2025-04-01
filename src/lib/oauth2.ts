@@ -36,6 +36,7 @@ export interface CookieOptions {
  * @param options.secure Whether the connection is secure (default: false)
  * @param options.accessLifetime Access token expiration in seconds (default: 1 hour)
  * @param options.refreshLifetime Refresh token expiration in seconds (default: 30 days)
+ * @param options.noBasicAuth Do not allow basic authentication
  * @param options.loginPage The login page URL (default: empty and someone else will handle the login). It could be a function too
  */
 export function createOAuth2Server(
@@ -45,12 +46,14 @@ export function createOAuth2Server(
         secure?: boolean;
         accessLifetime?: number;
         refreshLifetime?: number;
+        noBasicAuth?: boolean;
         loginPage?: string | ((req: Request) => string);
     },
 ): OAuth2Model {
     const model = new OAuth2Model(adapter, {
         accessLifetime: options.accessLifetime,
         refreshLifeTime: options.refreshLifetime,
+        noBasicAuth: options.noBasicAuth,
     });
 
     const oauth = new OAuth2Server({
