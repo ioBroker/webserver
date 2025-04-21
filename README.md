@@ -135,7 +135,7 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 1.2.7 (2025-04-21)
 
 - (@GermanBluefox) Corrected a problem with authentication, as type-is was too old.
 
