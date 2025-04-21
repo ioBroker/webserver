@@ -85,4 +85,3 @@ gen
 *.tsbuildinfo
 
 build
-package-lock.json

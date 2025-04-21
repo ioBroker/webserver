@@ -135,6 +135,10 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+
+- (@GermanBluefox) Corrected a problem with authentication, as type-is was too old.
+
 ### 1.2.6 (2025-04-01)
 
 - (@GermanBluefox) Changed the order of authentications. Basic authentication will be checked as the last one.
