@@ -54,8 +54,8 @@ export class OAuth2Model implements RefreshTokenModel {
         },
     ) {
         this.adapter = adapter;
-        this.accessTokenLifetime ||= options?.accessLifetime || this.accessTokenLifetime;
-        this.refreshTokenLifetime ||= options?.refreshLifeTime || this.refreshTokenLifetime;
+        this.accessTokenLifetime = options?.accessLifetime || this.accessTokenLifetime;
+        this.refreshTokenLifetime = options?.refreshLifeTime || this.refreshTokenLifetime;
         this.noBasicAuth = options?.noBasicAuth || false;
     }
 
