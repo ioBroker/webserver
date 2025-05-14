@@ -59,17 +59,22 @@ interface SsoCallbackQuery {
     state: string;
 }
 
+/** Response from Keycloak */
 interface OidcTokenResponse {
     access_token: string;
     refresh_token: string;
     token_type: 'Bearer';
-    /** Used to retrieve the JwtFullPayload */
+    /** Used to retrieve the {@link JwtFullPayload} */
     id_token: string;
     'not-before-policy': number;
     session_state: string;
     scope: string;
 }
 
+/**
+ * Retrieved by decoding the JWT {@link OidcTokenResponse.id_token}
+ * The `sub` attribute is used to identify a user in `common.externalAuthentication.oidc.sub`
+ */
 interface JwtFullPayload extends Required<JwtPayload> {
     auth_time: number;
     typ: string;
