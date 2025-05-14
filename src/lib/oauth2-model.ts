@@ -11,6 +11,7 @@ import {
 } from 'oauth2-server';
 
 import type { NextFunction, Request, Response } from 'express';
+import { SSO_PASSWORD } from './utils';
 
 // We must save both tokens, as by logout we must revoke both
 export interface InternalStorageToken {
@@ -97,6 +98,7 @@ export class OAuth2Model implements RefreshTokenModel {
 
     authorize = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         const _req: Request & { user?: string } = req;
+
         // Check if the user is logged in
         if (!_req.user) {
             // If authenticated by token in query like /blabla?token=ACCESS_TOKEN
@@ -188,6 +190,13 @@ export class OAuth2Model implements RefreshTokenModel {
      * Get user.
      */
     getUser = async (username: string, password: string): Promise<User | Falsey> => {
+        if (password === SSO_PASSWORD) {
+            this.adapter.log.debug(`SSO login as ${username}`);
+            return {
+                id: username,
+            };
+        }
+
         const now = Date.now();
         if (this.bruteForce[username]?.errors > 4) {
             let minutes = now - this.bruteForce[username].time;
