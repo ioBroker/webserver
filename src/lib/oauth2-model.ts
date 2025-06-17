@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import {
     type Client,
     type Falsey,
@@ -11,7 +11,6 @@ import {
 } from 'oauth2-server';
 
 import type { NextFunction, Request, Response } from 'express';
-import { SSO_PASSWORD } from './utils';
 
 // We must save both tokens, as by logout we must revoke both
 export interface InternalStorageToken {
@@ -38,7 +37,7 @@ export class OAuth2Model implements RefreshTokenModel {
     private bruteForce: Record<string, { errors: number; time: number }> = {};
 
     /**
-     * Create a OAuth2model
+     * Create an OAuth2model
      *
      * @param adapter ioBroker adapter
      * @param options Options
@@ -160,6 +159,47 @@ export class OAuth2Model implements RefreshTokenModel {
         next();
     };
 
+    generateTokens = async (userName: string): Promise<Token> => {
+        const accessToken = createHash('sha1').update(randomBytes(256)).digest('hex');
+        const refreshToken = createHash('sha1').update(randomBytes(256)).digest('hex');
+        const accessTokenExpiresAt = new Date(Date.now() + this.accessTokenLifetime * 1000);
+        const refreshTokenExpiresAt = new Date(Date.now() + this.refreshTokenLifetime * 1000);
+
+        // userName is short and already checked
+
+        const result: PartialToken = {
+            accessToken: accessToken,
+            accessTokenExpiresAt: accessTokenExpiresAt,
+            refreshToken: refreshToken,
+            refreshTokenExpiresAt: refreshTokenExpiresAt,
+        };
+
+        await this.saveToken(
+            result,
+            {
+                id: 'ioBroker',
+                grants: ['password', 'refresh_token'],
+                accessTokenLifetime: this.accessTokenLifetime,
+                refreshTokenLifetime: this.refreshTokenLifetime,
+            },
+            { id: userName },
+        );
+
+        return {
+            accessToken: result.accessToken,
+            accessTokenExpiresAt: result.accessTokenExpiresAt,
+            refreshToken: result.refreshToken,
+            refreshTokenExpiresAt: result.refreshTokenExpiresAt,
+            user: { id: userName },
+            client: {
+                id: 'ioBroker',
+                grants: ['password', 'refresh_token'],
+                accessTokenLifetime: this.accessTokenLifetime,
+                refreshTokenLifetime: this.refreshTokenLifetime,
+            },
+        };
+    };
+
     /**
      * Get refresh token.
      */
@@ -190,13 +230,6 @@ export class OAuth2Model implements RefreshTokenModel {
      * Get user.
      */
     getUser = async (username: string, password: string): Promise<User | Falsey> => {
-        if (password === SSO_PASSWORD) {
-            this.adapter.log.debug(`SSO login as ${username}`);
-            return {
-                id: username,
-            };
-        }
-
         const now = Date.now();
         if (this.bruteForce[username]?.errors > 4) {
             let minutes = now - this.bruteForce[username].time;

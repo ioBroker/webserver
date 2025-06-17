@@ -1,16 +1,17 @@
 import type { Request, Response, Express, NextFunction } from 'express';
 import OAuth2Server, { Request as OAuthRequest, Response as OAuthResponse, type Token } from 'oauth2-server';
-import { type InternalStorageToken, OAuth2Model } from './oauth2-model';
 import { verify, type JwtHeader, type SigningKeyCallback, type JwtPayload } from 'jsonwebtoken';
 import { JwksClient } from 'jwks-rsa';
-import { oauthTokenToResponse, SSO_PASSWORD } from './utils';
+
+import { type InternalStorageToken, OAuth2Model } from './oauth2-model';
+import { oauthTokenToResponse } from './utils';
 
 export interface CookieOptions {
     /** Convenient option for setting the expiry time relative to the current time in **milliseconds**. */
     maxAge?: number | undefined;
     /** Indicates if the cookie should be signed. */
     signed?: boolean | undefined;
-    /** Expiry date of the cookie in GMT. If not specified or set to 0, creates a session cookie. */
+    /** Expiry date of the cookie in GMT. If not specified or set to 0, create a session cookie. */
     expires?: Date | undefined;
     /** Flags the cookie to be accessible only by the web server. */
     httpOnly?: boolean | undefined;
@@ -245,28 +246,9 @@ export function createOAuth2Server(
                 return res.redirect(stateObj.redirectUrl);
             }
 
-            const username = item.id;
-
             try {
-                const params = new URLSearchParams({
-                    grant_type: 'password',
-                    username,
-                    password: SSO_PASSWORD,
-                    client_id: 'ioBroker',
-                });
+                const oauthToken = await model.generateTokens(item.id);
 
-                const request = new OAuthRequest({
-                    method: 'POST',
-                    headers: {
-                        'content-type': 'application/x-www-form-urlencoded',
-                        'content-length': Buffer.byteLength(params.toString()).toString(),
-                    },
-                    body: Object.fromEntries(params.entries()),
-                    query: {},
-                });
-
-                const response = new OAuthResponse(res);
-                const oauthToken = await oauth.token(request, response);
                 const responseToken = oauthTokenToResponse(oauthToken);
 
                 const redirectUrl = new URL(stateObj.redirectUrl);
@@ -304,12 +286,6 @@ export function createOAuth2Server(
     // Post token.
     options.app.post('/oauth/token', (req: Request, res: Response) => {
         const request = new OAuthRequest(req);
-
-        if (request.body.password === SSO_PASSWORD) {
-            const error = new Error('SSO password used on standard login');
-            adapter.log.error(error.message);
-            return res.status(500).json(error);
-        }
 
         const response = new OAuthResponse(res);
         oauth

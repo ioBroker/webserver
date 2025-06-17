@@ -8,9 +8,6 @@ interface IobrokerOauthResponse {
     refresh_token_expires_in: number;
 }
 
-/** Password to detect SSO, it is too short for official passwords and will be declined on non-SSO requests */
-export const SSO_PASSWORD = 'SSO';
-
 /**
  * Convert oauth2 token to JSON response
  *
