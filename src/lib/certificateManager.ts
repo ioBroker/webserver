@@ -15,7 +15,9 @@ export interface CertificateCollection {
     /** domains - mandatory */
     domains: string[];
     /** chain - optional */
-    chain?: string | Buffer;
+    chain?: string | Buffer | (Buffer | string)[];
+    /** Optional flag to indicate that the certificate is only for staging/testing purposes and should not be used in production */
+    staging?: boolean;
 }
 
 export type SubscribeCertificateCollectionsCallback = (
@@ -38,7 +40,7 @@ export class CertificateManager {
     async getAllCollections(): Promise<Record<string, CertificateCollection> | null> {
         try {
             const obj = await this.adapter.getForeignObjectAsync(SYSTEM_CERTIFICATES_ID);
-            // If collectionId does not exist not an error situation: return null to indicate this.
+            // If collectionId does not exist, not an error situation: return null to indicate this.
             const collections = obj?.native.collections;
 
             return collections || null;
@@ -136,7 +138,7 @@ export class CertificateManager {
                     if (collections[collectionId]) {
                         callback(null, { collectionId: collections[collectionId] });
                     } else {
-                        // Can't find requested collection ID, return an empty object & error
+                        // Can't find the requested collection ID, return an empty object & error
                         callback(new Error(`Subscribed collection ID ${collectionId} not found`), {});
                     }
                 }

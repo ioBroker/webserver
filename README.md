@@ -135,6 +135,9 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Added missing types for the acme adapter
+
 ### 1.3.1 (2025-06-17)
 - (@foxriver76) Implemented (for now - inofficial) Keycloack SSO support
 

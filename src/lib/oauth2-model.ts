@@ -100,7 +100,7 @@ export class OAuth2Model implements RefreshTokenModel {
 
         // Check if the user is logged in
         if (!_req.user) {
-            // If authenticated by token in query like /blabla?token=ACCESS_TOKEN
+            // If authenticated by token in a query like /blabla?token=ACCESS_TOKEN
             if (_req.query.token) {
                 const token = await this.getAccessToken(_req.query.token as string);
                 if (token) {
@@ -117,7 +117,7 @@ export class OAuth2Model implements RefreshTokenModel {
                     return;
                 }
             }
-            // If authentication by access token in cookie
+            // If authentication by access token in a cookie
             if (!_req.user && _req.headers?.cookie) {
                 // If authenticated by cookie, like {headers: {cookie: "access_token=ACCESS_TOKEN"}}
                 const cookies = _req.headers.cookie.split(';').map(c => c.trim().split('='));
@@ -130,7 +130,7 @@ export class OAuth2Model implements RefreshTokenModel {
                 }
             }
             if (!_req.user && _req.query.user && _req.query.pass) {
-                // If authenticated by query like /blabla?user=USER&pass=PASS
+                // If authenticated by a query like /blabla?user=USER&pass=PASS
                 const user = await this.getUser(_req.query.user as string, _req.query.pass as string);
                 if (user) {
                     _req.user = user.id;

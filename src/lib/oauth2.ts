@@ -272,9 +272,7 @@ export function createOAuth2Server(
             return res.redirect(stateObj.redirectUrl);
         }
 
-        // @ts-expect-error needs to be allowed explicitly
         userObj.common.externalAuthentication ??= {};
-        // @ts-expect-error needs to be allowed explicitly
         userObj.common.externalAuthentication.oidc = { sub: jwtVerifiedPayload.sub };
         await adapter.extendForeignObjectAsync(`system.user.${stateObj.user}`, userObj);
 

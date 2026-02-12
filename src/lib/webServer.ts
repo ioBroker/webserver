@@ -116,7 +116,7 @@ export class WebServer {
     }
 
     /**
-     * Initialize new https/http server, according to configuration, it will be present on `this.server`
+     * Initialize a new https / http server; according to configuration, it will be present on `this.server`
      */
     async init(): Promise<http.Server | https.Server> {
         if (!this.certManager) {
@@ -206,7 +206,7 @@ export class WebServer {
                                 // This is very bad, and perhaps the adapter should also terminate itself?
                             }
                         }
-                        // contexts are now up-to-date and will be utilized in SNICallback - nothing more to do.
+                        // contexts are now up to date and will be utilized in SNICallback - nothing more to do.
                     } else if (err) {
                         this.adapter.log.error(`Error updating certificate collections: ${err.toString()}`);
                     } else {

@@ -67,8 +67,8 @@ function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promis
 }
 
 /**
- * Checks public IP address of the server and tries to connect to it.
- * Throws error if connection is possible.
+ * Checks the public IP address of the server and tries to connect to it.
+ * Throws error if a connection is possible.
  */
 async function checkPublicIP(port: number | string, pattern?: string, customPath?: string): Promise<void> {
     if (typeof port === 'string') {
