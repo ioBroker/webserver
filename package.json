@@ -1,56 +1,60 @@
 {
-  "name": "@iobroker/webserver",
-  "version": "1.3.2",
-  "license": "MIT",
-  "engines": {
-    "node": ">=16.0.0"
-  },
-  "homepage": "https://github.com/ioBroker/webserver",
-  "author": {
-    "name": "Moritz Heusinger",
-    "email": "moritz.heusinger@gmail.com"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "build": "tsc -b tsconfig.build.json",
-    "lint": "eslint src",
-    "release": "release-script",
-    "release-patch": "release-script patch --yes",
-    "release-minor": "release-script minor --yes",
-    "release-major": "release-script major --yes",
-    "update-packages": "npx -y npm-check-updates --upgrade",
-    "npm": "npm i"
-  },
-  "bugs": {
-    "url": "https://github.com/ioBroker/webserver/issues"
-  },
-  "files": [
-    "build/",
-    "LICENSE"
-  ],
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
-  "dependencies": {
-    "jsonwebtoken": "^9.0.3",
-    "jwks-rsa": "^3.2.2",
-    "oauth2-server": "^3.1.1"
-  },
-  "overrides_comment": "We override type-is as is conflicting with body-parser",
-  "overrides": {
-    "oauth2-server": {
-      "type-is": "2.0.1"
+    "name": "@iobroker/webserver",
+    "version": "1.3.2",
+    "license": "MIT",
+    "engines": {
+        "node": ">=16.0.0"
+    },
+    "homepage": "https://github.com/ioBroker/webserver",
+    "author": {
+        "name": "Moritz Heusinger",
+        "email": "moritz.heusinger@gmail.com"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "tsc -b tsconfig.build.json",
+        "lint": "eslint src",
+        "release": "release-script",
+        "release-patch": "release-script patch --yes",
+        "release-minor": "release-script minor --yes",
+        "release-major": "release-script major --yes",
+        "update-packages": "npx -y npm-check-updates --upgrade",
+        "npm": "npm i"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ioBroker/webserver"
+    },
+    "bugs": {
+        "url": "https://github.com/ioBroker/webserver/issues"
+    },
+    "files": [
+        "build/",
+        "LICENSE"
+    ],
+    "main": "build/index.js",
+    "types": "build/index.d.ts",
+    "dependencies": {
+        "jsonwebtoken": "^9.0.3",
+        "jwks-rsa": "^3.2.2",
+        "oauth2-server": "^3.1.1"
+    },
+    "overrides_comment": "We override type-is as is conflicting with body-parser",
+    "overrides": {
+        "oauth2-server": {
+            "type-is": "2.0.1"
+        }
+    },
+    "devDependencies": {
+        "@alcalzone/release-script": "^5.0.0",
+        "@alcalzone/release-script-plugin-license": "^4.0.0",
+        "@iobroker/eslint-config": "^2.2.0",
+        "@iobroker/types": "^7.1.0",
+        "@types/express": "^5.0.6",
+        "@types/node": "^25.2.3",
+        "@types/oauth2-server": "^3.0.18",
+        "typescript": "~5.9.3"
     }
-  },
-  "devDependencies": {
-    "@alcalzone/release-script": "^5.0.0",
-    "@alcalzone/release-script-plugin-license": "^4.0.0",
-    "@iobroker/eslint-config": "^2.2.0",
-    "@iobroker/types": "^7.1.0",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.2.3",
-    "@types/oauth2-server": "^3.0.18",
-    "typescript": "~5.9.3"
-  }
 }
