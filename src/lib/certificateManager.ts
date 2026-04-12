@@ -90,7 +90,7 @@ export class CertificateManager {
     }
 
     /**
-     * Remove collection of SSL keys, certificates, etc. by ID
+     * Remove a collection of SSL keys, certificates, etc. by ID
      *
      * @param collectionId collection ID
      */
