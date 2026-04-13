@@ -136,7 +136,7 @@ export class CertificateManager {
                     callback(null, collections);
                 } else {
                     if (collections[collectionId]) {
-                        callback(null, { collectionId: collections[collectionId] });
+                        callback(null, { [collectionId]: collections[collectionId] });
                     } else {
                         // Can't find the requested collection ID, return an empty object & error
                         callback(new Error(`Subscribed collection ID ${collectionId} not found`), {});

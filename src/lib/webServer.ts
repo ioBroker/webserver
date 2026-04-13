@@ -161,10 +161,6 @@ export class WebServer {
                 }
                 return this.server;
             }
-
-            if (!collections) {
-                throw new Error('Cannot create secure server: No certificate collection found');
-            }
         } else {
             // fallback to self-signed or custom certificates
             collections = null;
@@ -186,7 +182,9 @@ export class WebServer {
 
         let contexts: Record<string, tls.SecureContext> | undefined;
 
-        const customCertificatesContext = tls.createSecureContext(customCertificates as SecureContextOptions);
+        const customCertificatesContext = customCertificates
+            ? tls.createSecureContext(customCertificates as SecureContextOptions)
+            : null;
 
         if (collections) {
             contexts = this.buildSecureContexts(collections);
@@ -274,6 +272,7 @@ export class WebServer {
             },
         };
 
+        this.initAccessControl();
         this.adapter.log.debug('Using https createServer');
         this.server = https.createServer(options, this.app);
         return this.server;

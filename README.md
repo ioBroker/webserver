@@ -135,6 +135,10 @@ The answer is the same as for the login but with new tokens.
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Fixed possible errors
+- (@GermanBluefox) Updated packages
+
 ### 1.3.3 (2026-02-12)
 - (@GermanBluefox) Added missing types for the acme adapter
 

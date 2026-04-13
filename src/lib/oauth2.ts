@@ -156,7 +156,14 @@ export function createOAuth2Server(
         const { code, state } = req.query as unknown as SsoCallbackQuery;
 
         const thisHost = `${req.protocol}://${req.get('host')}`;
-        const stateObj: SsoState = JSON.parse(decodeURIComponent(state));
+        let stateObj: SsoState;
+        try {
+            stateObj = JSON.parse(decodeURIComponent(state));
+        } catch {
+            adapter.log.error('SSO: Invalid state parameter');
+            res.status(400).send('Invalid state parameter');
+            return;
+        }
 
         /**
          * Get key from Keycloak
@@ -221,6 +228,10 @@ export function createOAuth2Server(
                 }),
             });
 
+            if (!tokenResponse.ok) {
+                throw new Error(`Keycloak token request failed with status ${tokenResponse.status}`);
+            }
+
             tokenData = await tokenResponse.json();
             jwtVerifiedPayload = await verifyIdToken(tokenData.id_token);
 
@@ -265,6 +276,11 @@ export function createOAuth2Server(
         }
 
         // user connection flow
+        if (stateObj.method !== 'register' || !stateObj.user) {
+            adapter.log.error(`SSO: Invalid state - expected register method with user`);
+            return res.redirect(stateObj.redirectUrl);
+        }
+
         const userObj = await adapter.getForeignObjectAsync(`system.user.${stateObj.user}`);
 
         if (!userObj) {

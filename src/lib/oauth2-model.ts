@@ -247,7 +247,7 @@ export class OAuth2Model implements RefreshTokenModel {
                 }
             } else if (this.bruteForce[username].errors < 15) {
                 if (now - this.bruteForce[username].time < 600_000) {
-                    minutes = Math.ceil((60_0000 - minutes) / 60_000);
+                    minutes = Math.ceil((600_000 - minutes) / 60_000);
                 } else {
                     minutes = 0;
                 }
@@ -300,14 +300,22 @@ export class OAuth2Model implements RefreshTokenModel {
             client,
         };
 
-        const accessTokenTtl = Math.floor((token.accessTokenExpiresAt!.getTime() - Date.now()) / 1000);
-        const refreshTokenTtl = Math.floor((token.refreshTokenExpiresAt!.getTime() - Date.now()) / 1000);
+        const accessTokenTtl = token.accessTokenExpiresAt
+            ? Math.floor((token.accessTokenExpiresAt.getTime() - Date.now()) / 1000)
+            : this.accessTokenLifetime;
+        const refreshTokenTtl = token.refreshTokenExpiresAt
+            ? Math.floor((token.refreshTokenExpiresAt.getTime() - Date.now()) / 1000)
+            : this.refreshTokenLifetime;
 
         const internalToken: InternalStorageToken = {
             aToken: token.accessToken,
-            aExp: token.accessTokenExpiresAt!.getTime(),
-            rToken: token.refreshToken!,
-            rExp: token.refreshTokenExpiresAt!.getTime(),
+            aExp: token.accessTokenExpiresAt
+                ? token.accessTokenExpiresAt.getTime()
+                : Date.now() + this.accessTokenLifetime * 1000,
+            rToken: token.refreshToken || '',
+            rExp: token.refreshTokenExpiresAt
+                ? token.refreshTokenExpiresAt.getTime()
+                : Date.now() + this.refreshTokenLifetime * 1000,
             user: user.id,
         };
 

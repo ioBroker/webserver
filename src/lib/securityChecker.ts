@@ -19,6 +19,7 @@ function _getPublicIP(): Promise<string> {
 function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promise<null> {
     return new Promise((resolve, reject) => {
         const oldState = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
         const urlParsed = new URL(url);
 
         const options = {
@@ -45,7 +46,7 @@ function _checkURL(url: string, pattern?: string, fullCompare?: boolean): Promis
                                 new Error(`The URL "${url}" is reachable from internet without any protection!`),
                             );
                         }
-                        resolve(null);
+                        return resolve(null);
                     }
 
                     reject(new Error(`The URL "${url}" is reachable from internet without any protection!`));
