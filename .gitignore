@@ -85,3 +85,4 @@ gen
 *.tsbuildinfo
 
 build
+/.claude/settings.local.json
