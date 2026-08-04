@@ -1,4 +1,4 @@
-import tls, { type SecureContextOptions } from 'node:tls';
+import tls from 'node:tls';
 import http from 'node:http';
 import https, { type ServerOptions } from 'node:https';
 import { type CertificateCollection, CertificateManager } from './certificateManager';
@@ -182,9 +182,7 @@ export class WebServer {
 
         let contexts: Record<string, tls.SecureContext> | undefined;
 
-        const customCertificatesContext = customCertificates
-            ? tls.createSecureContext(customCertificates as SecureContextOptions)
-            : null;
+        const customCertificatesContext = customCertificates ? tls.createSecureContext(customCertificates) : null;
 
         if (collections) {
             contexts = this.buildSecureContexts(collections);

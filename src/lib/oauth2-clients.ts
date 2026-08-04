@@ -248,7 +248,7 @@ export class OAuth2ClientStore {
                 name: client.client_name || client.client_id,
             },
             native: { client },
-        } as ioBroker.SettableObject);
+        });
 
         this.cache.set(client.client_id, client);
 
