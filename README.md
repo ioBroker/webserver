@@ -208,7 +208,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 2.0.0 (2026-08-04)
 - (@GermanBluefox) Added the OAuth2 authorization code flow with PKCE, dynamic client registration, authorization server metadata and token revocation (opt-in via `authorizationCode: true`)
 - (@GermanBluefox) Tokens can now be bound to a client and a resource (RFC 8707); the binding survives a refresh
 - (@GermanBluefox) `/oauth/token` no longer requires the host adapter to install a body parser
