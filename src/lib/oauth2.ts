@@ -4,7 +4,9 @@ import { verify, type JwtHeader, type SigningKeyCallback, type JwtPayload } from
 import { JwksClient } from 'jwks-rsa';
 
 import { type InternalStorageToken, OAuth2Model } from './oauth2-model';
-import { oauthTokenToResponse } from './utils';
+import { AuthorizationCodeFlow } from './oauth2-authcode';
+import { OAuth2ClientStore } from './oauth2-clients';
+import { oauthTokenToResponse, readRequestBody } from './utils';
 
 export interface CookieOptions {
     /** Convenient option for setting the expiry time relative to the current time in **milliseconds**. */
@@ -113,6 +115,11 @@ const jwksClient = new JwksClient({
  * @param options.refreshLifetime Refresh token expiration in seconds (default: 30 days)
  * @param options.noBasicAuth Do not allow basic authentication
  * @param options.loginPage The login page URL (default: empty and someone else will handle the login). It could be a function too
+ * @param options.authorizationCode Enable the browser-based authorization code flow with PKCE (default: disabled)
+ * @param options.baseUrl Externally reachable base URL, required behind a reverse proxy
+ * @param options.dynamicClientRegistration Let clients register themselves via RFC 7591 (default: enabled with the authorization code flow)
+ * @param options.maxClients Maximum number of registered clients before the oldest dynamic ones are pruned
+ * @param options.productName Name shown on the login and consent pages (default: "ioBroker")
  */
 export function createOAuth2Server(
     adapter: ioBroker.Adapter,
@@ -123,6 +130,11 @@ export function createOAuth2Server(
         refreshLifetime?: number;
         noBasicAuth?: boolean;
         loginPage?: string | ((req: Request) => string);
+        authorizationCode?: boolean;
+        baseUrl?: string | ((req: Request) => string);
+        dynamicClientRegistration?: boolean;
+        maxClients?: number;
+        productName?: string;
     },
 ): OAuth2Model {
     const model = new OAuth2Model(adapter, {
@@ -135,6 +147,23 @@ export function createOAuth2Server(
         model,
         requireClientAuthentication: { password: false, refresh_token: false },
     });
+
+    // The authorization code flow is opt-in: it opens a browser-facing login and, unless disabled,
+    // an open registration endpoint, so no existing installation should get it by surprise.
+    const authCodeFlow = options.authorizationCode
+        ? new AuthorizationCodeFlow(adapter, {
+              app: options.app,
+              model,
+              clientStore: new OAuth2ClientStore(adapter, { maxClients: options.maxClients }),
+              baseUrl: options.baseUrl,
+              dynamicClientRegistration: options.dynamicClientRegistration,
+              productName: options.productName,
+          })
+        : null;
+
+    // Discovery, registration and revocation must stay reachable without credentials, so they are
+    // registered before the app-wide `authorize` middleware below.
+    authCodeFlow?.registerPublicRoutes();
 
     options.app.get('/sso', (req: Request<any, any, any, SsoState>, res: Response): void => {
         const scope = 'openid email';
@@ -299,10 +328,36 @@ export function createOAuth2Server(
 
     // Post token.
     options.app.post('/oauth/token', (req: Request, res: Response) => {
+        void handleTokenRequest(req, res);
+    });
+
+    /**
+     * Dispatch a token request to the matching grant. The body is read up front because the grant
+     * type decides where the request goes, and not every host adapter installs a body parser.
+     *
+     * @param req The incoming request
+     * @param res The response to write to
+     */
+    async function handleTokenRequest(req: Request, res: Response): Promise<void> {
+        if (authCodeFlow) {
+            try {
+                // Hand the parsed body back to Express so `oauth2-server` finds it below.
+                req.body = await readRequestBody(req);
+            } catch (e) {
+                res.status(400).json({ error: 'invalid_request', error_description: (e as Error).message });
+                return;
+            }
+
+            if (req.body?.grant_type === 'authorization_code') {
+                await authCodeFlow.handleTokenRequest(req, res);
+                return;
+            }
+        }
+
         const request = new OAuthRequest(req);
 
         const response = new OAuthResponse(res);
-        oauth
+        await oauth
             .token(request, response)
             .then((token: Token): void => {
                 // save access token and refresh token in cookies with expiration time and flags HTTPOnly, Secure.
@@ -326,7 +381,7 @@ export function createOAuth2Server(
             .catch((err: any): void => {
                 res.status(err.code || 500).json(err);
             });
-    });
+    }
 
     options.app.get('/logout', (req: Request, res: Response, next: NextFunction): void => {
         let accessToken = req.headers.cookie?.split(';').find(c => c.trim().startsWith('access_token='));
@@ -374,6 +429,10 @@ export function createOAuth2Server(
     });
 
     options.app.use(model.authorize);
+
+    // Registered after `authorize` so `req.user` is already filled from an `access_token` cookie:
+    // a user who is signed in to the web UI only has to confirm, not to log in again.
+    authCodeFlow?.registerAuthorizeRoutes();
 
     return model;
 }

@@ -129,12 +129,90 @@ Data: grant_type=refresh_token&refresh_token=<REFRESH_TOKEN>&client_id=ioBroker&
 
 The answer is the same as for the login but with new tokens.
 
+## Authorization code flow with PKCE
+
+The password grant above requires the client to handle the user's credentials. Clients that run
+outside your control — MCP clients such as Claude Desktop, or any "connect your account" integration —
+must not do that. For them the webserver can additionally offer the browser-based **authorization
+code flow with PKCE** (RFC 7636), including dynamic client registration (RFC 7591), authorization
+server metadata (RFC 8414), resource indicators (RFC 8707) and token revocation (RFC 7009).
+
+It is **opt-in**, because it exposes a browser-facing login page and — unless disabled — an open
+registration endpoint:
+
+```typescript
+createOAuth2Server(this, {
+    app: this.webServer.app,
+    secure: this.config.secure,
+    // Enable the browser-based flow
+    authorizationCode: true,
+    // Externally reachable base URL. REQUIRED behind a reverse proxy: the URLs published in the
+    // discovery document must be the ones the client can actually reach.
+    baseUrl: 'https://iobroker.example.com',
+    // Optional: pin the name shown on the login and consent pages
+    productName: 'ioBroker',
+    // Optional: require clients to be registered by hand instead of via RFC 7591
+    dynamicClientRegistration: false,
+    // Optional: how many clients to keep before the oldest dynamic ones are pruned (default 100)
+    maxClients: 100,
+});
+```
+
+This adds the following endpoints:
+
+| Endpoint                                      | Purpose                                                        |
+|-----------------------------------------------|----------------------------------------------------------------|
+| `GET /.well-known/oauth-authorization-server` | Discovery document (RFC 8414)                                  |
+| `POST /oauth/register`                        | Dynamic client registration (RFC 7591), can be disabled        |
+| `GET /oauth/authorize`                        | Login and consent page                                         |
+| `POST /oauth/authorize`                       | Login and consent submission                                   |
+| `POST /oauth/token`                           | Also accepts `grant_type=authorization_code`                   |
+| `POST /oauth/revoke`                          | Token revocation (RFC 7009)                                    |
+
+Notes:
+
+- **PKCE is mandatory.** Only `code_challenge_method=S256` is accepted; there are no client secrets,
+  every client is a public client.
+- **Only registered redirect URIs are accepted**, compared byte-for-byte. Plain `http:` is allowed
+  only for loopback addresses (RFC 8252 §7.3), so native apps can use an ephemeral local port.
+- **Users who are already signed in** (an `access_token` cookie from the web UI) only see the consent
+  step, not another login form.
+- **`resource` (RFC 8707) is bound to the token.** `OAuth2Model.getTokenInfo(accessToken)` returns
+  the stored record including `aud` and `clientId`, so a resource server can reject tokens that were
+  issued for something else. The binding survives a refresh.
+- **HTTPS is required** for anything but localhost — the flow runs through the user's browser, and
+  clients refuse plain `http:` for remote hosts.
+- Registered clients are stored as ioBroker objects under `<adapter.namespace>.oauth.clients.*`.
+
+Client registration:
+
+```http
+POST /oauth/register HTTP/1.1
+Content-Type: application/json
+
+{ "client_name": "Claude", "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"] }
+```
+
+Token exchange:
+
+```http
+POST /oauth/token HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CLIENT_ID>&redirect_uri=<REDIRECT_URI>
+```
+
 ## Changelog
 
 <!--
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Added the OAuth2 authorization code flow with PKCE, dynamic client registration, authorization server metadata and token revocation (opt-in via `authorizationCode: true`)
+- (@GermanBluefox) Tokens can now be bound to a client and a resource (RFC 8707); the binding survives a refresh
+- (@GermanBluefox) `/oauth/token` no longer requires the host adapter to install a body parser
+
 ### 1.4.0 (2026-04-13)
 - (@GermanBluefox) Fixed possible errors
 - (@GermanBluefox) Updated packages

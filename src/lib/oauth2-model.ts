@@ -24,6 +24,28 @@ export interface InternalStorageToken {
     rExp: number;
     /** User ID */
     user: string;
+    /**
+     * ID of the OAuth2 client the token was issued to. Only set for tokens from the authorization
+     * code grant; tokens from the password grant are not tied to a registered client.
+     */
+    clientId?: string;
+    /**
+     * Resource the token is meant for (RFC 8707 `resource`). A resource server must reject tokens
+     * carrying a different audience. Unset means the token is not bound to any single resource.
+     */
+    aud?: string;
+    /** Granted scope, if the client asked for one. */
+    scope?: string;
+}
+
+/** Extra properties bound to a token beyond the user it belongs to. */
+export interface TokenBinding {
+    /** ID of the OAuth2 client the token is issued to */
+    clientId?: string;
+    /** Resource the token is valid for (RFC 8707) */
+    aud?: string;
+    /** Granted scope */
+    scope?: string;
 }
 
 // ----- OAuth2Model Class -----
@@ -60,9 +82,7 @@ export class OAuth2Model implements RefreshTokenModel {
     }
 
     getAccessToken = async (bearerToken: string): Promise<Token | Falsey> => {
-        const token = await new Promise<InternalStorageToken | null>(resolve =>
-            this.adapter.getSession(`a:${bearerToken}`, resolve),
-        );
+        const token = await this.getTokenInfo(bearerToken);
         if (!token) {
             return null;
         }
@@ -78,8 +98,24 @@ export class OAuth2Model implements RefreshTokenModel {
             },
             user: {
                 id: token.user,
+                // Carried along so a refresh keeps the binding, and so resource servers can read it.
+                clientId: token.clientId,
+                aud: token.aud,
+                scope: token.scope,
             },
         };
+    };
+
+    /**
+     * Read the stored record of an access token, including the client and resource it is bound to.
+     * Resource servers use this to verify that a token was actually issued for them.
+     *
+     * @param bearerToken The access token to look up
+     */
+    getTokenInfo = async (bearerToken: string): Promise<InternalStorageToken | null> => {
+        return new Promise<InternalStorageToken | null>(resolve =>
+            this.adapter.getSession(`a:${bearerToken}`, resolve),
+        );
     };
 
     /**
@@ -159,7 +195,13 @@ export class OAuth2Model implements RefreshTokenModel {
         next();
     };
 
-    generateTokens = async (userName: string): Promise<Token> => {
+    /**
+     * Issue a fresh access/refresh token pair for a user.
+     *
+     * @param userName The ioBroker user name (without the `system.user.` prefix)
+     * @param binding Optional client/resource binding for tokens issued through the authorization code grant
+     */
+    generateTokens = async (userName: string, binding?: TokenBinding): Promise<Token> => {
         const accessToken = createHash('sha1').update(randomBytes(256)).digest('hex');
         const refreshToken = createHash('sha1').update(randomBytes(256)).digest('hex');
         const accessTokenExpiresAt = new Date(Date.now() + this.accessTokenLifetime * 1000);
@@ -174,6 +216,13 @@ export class OAuth2Model implements RefreshTokenModel {
             refreshTokenExpiresAt: refreshTokenExpiresAt,
         };
 
+        const user: User = {
+            id: userName,
+            clientId: binding?.clientId,
+            aud: binding?.aud,
+            scope: binding?.scope,
+        };
+
         await this.saveToken(
             result,
             {
@@ -182,7 +231,7 @@ export class OAuth2Model implements RefreshTokenModel {
                 accessTokenLifetime: this.accessTokenLifetime,
                 refreshTokenLifetime: this.refreshTokenLifetime,
             },
-            { id: userName },
+            user,
         );
 
         return {
@@ -190,7 +239,7 @@ export class OAuth2Model implements RefreshTokenModel {
             accessTokenExpiresAt: result.accessTokenExpiresAt,
             refreshToken: result.refreshToken,
             refreshTokenExpiresAt: result.refreshTokenExpiresAt,
-            user: { id: userName },
+            user,
             client: {
                 id: 'ioBroker',
                 grants: ['password', 'refresh_token'],
@@ -222,6 +271,11 @@ export class OAuth2Model implements RefreshTokenModel {
             },
             user: {
                 id: token.user,
+                // oauth2-server hands this same object to `saveToken`, which is how a refreshed
+                // token inherits the client and resource binding of the token it replaces.
+                clientId: token.clientId,
+                aud: token.aud,
+                scope: token.scope,
             },
         };
     };
@@ -317,6 +371,11 @@ export class OAuth2Model implements RefreshTokenModel {
                 ? token.refreshTokenExpiresAt.getTime()
                 : Date.now() + this.refreshTokenLifetime * 1000,
             user: user.id,
+            // Present when the token comes from the authorization code grant, either directly or
+            // through a refresh — `getRefreshToken` passes the binding along on the user object.
+            clientId: user.clientId,
+            aud: user.aud,
+            scope: user.scope,
         };
 
         await Promise.all([
@@ -333,6 +392,36 @@ export class OAuth2Model implements RefreshTokenModel {
         ]);
 
         return data;
+    };
+
+    /**
+     * Revoke an access or refresh token together with its counterpart.
+     *
+     * {@link revokeToken} can only drop the side it was handed, but both sessions store the full pair,
+     * so a single token value is enough to invalidate the whole grant — which is what RFC 7009
+     * revocation and "disconnect this app" need.
+     *
+     * @param token Either the access or the refresh token
+     * @returns Whether a matching token was found
+     */
+    revokeTokenPair = async (token: string): Promise<boolean> => {
+        const stored =
+            (await new Promise<InternalStorageToken | null>(resolve =>
+                this.adapter.getSession(`a:${token}`, resolve),
+            )) ||
+            (await new Promise<InternalStorageToken | null>(resolve => this.adapter.getSession(`r:${token}`, resolve)));
+
+        if (!stored) {
+            return false;
+        }
+
+        if (stored.aToken) {
+            await this.adapter.destroySession(`a:${stored.aToken}`);
+        }
+        if (stored.rToken) {
+            await this.adapter.destroySession(`r:${stored.rToken}`);
+        }
+        return true;
     };
 
     revokeToken = async (token: RefreshToken | Token): Promise<boolean> => {
