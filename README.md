@@ -234,7 +234,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.0.0 (2026-08-26)
 - (@GermanBluefox) Fixed the OAuth2 consent page dropping the authorization response in Chromium and WebKit: `form-action` also applies to the redirect that follows the form POST, so the client's callback origin is now part of the policy. Clicking "Allow" appeared to do nothing and a second click reported "Request expired"
 - (@GermanBluefox) The login and consent forms now post to a relative URL, so the flow also works when the server is reverse-proxied under a path prefix
 - (@GermanBluefox) An unexpected error in an OAuth2 endpoint no longer escapes as an unhandled rejection (which terminates the host adapter); it is logged and answered with an error page
