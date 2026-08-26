@@ -237,6 +237,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
 ### **WORK IN PROGRESS**
 - (@GermanBluefox) `WebServer` now answers ACME HTTP-01 challenges published by the acme adapter, so it no longer has to be stopped to free port 80 (opt out via `acmeChallenge: false`)
 - (@GermanBluefox) Exported `acmeChallengeMiddleware` and `serveAcmeChallenge` for adapters that build their server themselves
+- (@GermanBluefox) **BREAKING:** Updated `jwks-rsa` to 4.x. It depends on the ESM-only jose 6, so the minimal Node.js version is now 20.19 (or 22.12 / 23+)
 
 ### 2.0.1 (2026-08-04)
 - (@GermanBluefox) Added the OAuth2 authorization code flow with PKCE, dynamic client registration, authorization server metadata and token revocation (opt-in via `authorizationCode: true`)
