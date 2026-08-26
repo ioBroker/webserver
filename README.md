@@ -59,6 +59,32 @@ const certManager = new CertificateManager({ adapter });
 const collections = await certManager.getAllCollections();
 ```
 
+## ACME HTTP-01 challenges
+
+A certificate authority validates an HTTP-01 challenge by fetching `http://<domain>/.well-known/acme-challenge/<token>` on port 80. Path and port are fixed by RFC 8555, so on a host with a single public IP that request lands on whichever adapter holds port 80 - usually `web` or `admin`. The `acme` adapter used to take that port over for the duration of an order, stopping the adapter that had it.
+
+`WebServer` answers those requests itself instead. The `acme` adapter publishes its tokens in `acme.<instance>.info.httpChallenges` and the lookup happens in front of the app, before any authentication, because the CA is anonymous:
+
+```typescript
+// Nothing to do - this is on by default
+const webServer = new WebServer({ app, adapter, secure: true });
+
+// Opt out and keep /.well-known/acme-challenge/ entirely to the app
+const webServer = new WebServer({ app, adapter, secure: true, acmeChallenge: false });
+```
+
+Only a request whose token is actually published is answered here; everything else is passed on to the app untouched, so nothing the app serves on that path is shadowed.
+
+An adapter that builds its server without `WebServer` can mount the same lookup itself, before any authentication middleware:
+
+```typescript
+import { acmeChallengeMiddleware } from '@iobroker/webserver';
+
+app.use(acmeChallengeMiddleware(adapter));
+```
+
+`serveAcmeChallenge(adapter, req, res)` is the same thing for a plain `http.RequestListener`; it resolves to `true` when it answered the request.
+
 ## OAuth2 support
 You can activate the OAuth2 support for the webserver. To do this, add the following code after the server is initialized:
 
@@ -208,6 +234,10 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) `WebServer` now answers ACME HTTP-01 challenges published by the acme adapter, so it no longer has to be stopped to free port 80 (opt out via `acmeChallenge: false`)
+- (@GermanBluefox) Exported `acmeChallengeMiddleware` and `serveAcmeChallenge` for adapters that build their server themselves
+
 ### 2.0.1 (2026-08-04)
 - (@GermanBluefox) Added the OAuth2 authorization code flow with PKCE, dynamic client registration, authorization server metadata and token revocation (opt-in via `authorizationCode: true`)
 - (@GermanBluefox) Tokens can now be bound to a client and a resource (RFC 8707); the binding survives a refresh

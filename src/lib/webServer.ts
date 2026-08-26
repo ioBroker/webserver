@@ -2,6 +2,7 @@ import tls from 'node:tls';
 import http from 'node:http';
 import https, { type ServerOptions } from 'node:https';
 import { type CertificateCollection, CertificateManager } from './certificateManager';
+import { ACME_CHALLENGE_PREFIX, serveAcmeChallenge } from './acmeChallenge';
 
 export interface WebServerAccessControl {
     /** Access-Control-Allow-Headers */
@@ -28,6 +29,12 @@ interface WebServerOptions {
     secure: boolean | undefined;
     /** access control options */
     accessControl?: WebServerAccessControl;
+    /**
+     * Answer ACME HTTP-01 challenges published by the acme adapter, so it does
+     * not have to stop this adapter to get at port 80. Enabled by default; set
+     * to false to keep `/.well-known/acme-challenge/` entirely to the app.
+     */
+    acmeChallenge?: boolean;
 }
 
 interface AdapterConfig {
@@ -58,6 +65,7 @@ export class WebServer {
     private originalApp: http.RequestListener | undefined;
     private readonly certManager: CertificateManager | undefined;
     private readonly accessControl: WebServerAccessControl | undefined;
+    private readonly acmeChallenge: boolean;
 
     constructor(options: WebServerOptions) {
         this.secure = !!options.secure;
@@ -67,6 +75,64 @@ export class WebServer {
             this.certManager = new CertificateManager({ adapter: options.adapter });
         }
         this.accessControl = options.accessControl;
+        this.acmeChallenge = options.acmeChallenge !== false;
+    }
+
+    /**
+     * Wrap the app with everything that has to run in front of it.
+     *
+     * Called from every branch of init() because each of them creates the
+     * server from `this.app` and there is no single point after it.
+     */
+    private prepareApp(): void {
+        this.initAccessControl();
+        // Outermost, so a challenge is answered without collecting CORS headers
+        // it has no use for.
+        this.initAcmeChallenge();
+    }
+
+    /**
+     * Put the ACME HTTP-01 challenge lookup in front of the app.
+     *
+     * In front rather than in a route because the CA is anonymous and the
+     * lookup therefore has to happen before any authentication the app
+     * installs. Requests that are not a published challenge are handed on
+     * untouched, so nothing the app serves is shadowed.
+     */
+    private initAcmeChallenge(): void {
+        if (!this.acmeChallenge) {
+            return;
+        }
+
+        const app = this.app;
+        const passOn = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+            if (app) {
+                app(req, res);
+            } else {
+                // Without an app there is nobody left to answer.
+                res.writeHead(404);
+                res.end();
+            }
+        };
+
+        this.app = (req, res) => {
+            // Cheap string test first: this runs for every single request.
+            if (!req.url?.startsWith(ACME_CHALLENGE_PREFIX)) {
+                passOn(req, res);
+                return;
+            }
+            serveAcmeChallenge(this.adapter, req, res).then(
+                served => {
+                    if (!served) {
+                        passOn(req, res);
+                    }
+                },
+                (e: Error) => {
+                    this.adapter.log.warn(`Could not answer ACME challenge: ${e.message}`);
+                    passOn(req, res);
+                },
+            );
+        };
     }
 
     private initAccessControl(): void {
@@ -121,7 +187,7 @@ export class WebServer {
     async init(): Promise<http.Server | https.Server> {
         if (!this.certManager) {
             this.adapter.log.debug('Secure connection not enabled - using http createServer');
-            this.initAccessControl();
+            this.prepareApp();
             this.server = http.createServer(this.app);
             return this.server;
         }
@@ -148,7 +214,7 @@ export class WebServer {
                     'Could not find any certificate collections - check ACME installation or consider installing',
                 );
 
-                this.initAccessControl();
+                this.prepareApp();
                 if (customCertificates) {
                     this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
                     this.server = https.createServer(customCertificates as ServerOptions, this.app);
@@ -164,7 +230,7 @@ export class WebServer {
         } else {
             // fallback to self-signed or custom certificates
             collections = null;
-            this.initAccessControl();
+            this.prepareApp();
 
             if (customCertificates) {
                 this.adapter.log.debug('Use self-signed certificates or custom certificates');
@@ -270,7 +336,7 @@ export class WebServer {
             },
         };
 
-        this.initAccessControl();
+        this.prepareApp();
         this.adapter.log.debug('Using https createServer');
         this.server = https.createServer(options, this.app);
         return this.server;

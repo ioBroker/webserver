@@ -25,6 +25,8 @@ All source lives in `src/`, compiled output goes to `build/`. The public API is 
 
 - **CertificateManager** (`src/lib/certificateManager.ts`) — Reads/writes SSL certificate collections from ioBroker's `system.certificates` object. Supports subscribing to live certificate updates.
 
+- **ACME challenge** (`src/lib/acmeChallenge.ts`) — Answers `GET /.well-known/acme-challenge/<token>` from the tokens the acme adapter publishes in `acme.*.info.httpChallenges`, so it no longer has to stop the adapter holding port 80. `WebServer` wraps the app with it by default (`acmeChallenge: false` opts out); `acmeChallengeMiddleware()` is the same for adapters building their own server. Only a published token is answered — anything else falls through to the app, so no application route is shadowed.
+
 - **OAuth2Model** (`src/lib/oauth2-model.ts`) — Implements `oauth2-server`'s `RefreshTokenModel` interface. Handles password-based auth with brute-force protection (escalating delays), multiple token extraction methods (Bearer, query param, cookie, Basic Auth), and session management via ioBroker's storage API. Access tokens default to 1 hour, refresh tokens to 30 days.
 
 - **OAuth2 Server** (`src/lib/oauth2.ts`) — Express route factory (`createOAuth2Server`) that wires up `/oauth/token`, `/sso`, `/sso-callback`, and `/logout` endpoints. Keycloak SSO uses JWT verification with JWKS. With `authorizationCode: true` it additionally wires up the authorization code flow below.

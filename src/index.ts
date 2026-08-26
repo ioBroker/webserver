@@ -1,4 +1,14 @@
 export { WebServer } from './lib/webServer';
+export {
+    serveAcmeChallenge,
+    acmeChallengeMiddleware,
+    acmeChallengeToken,
+    findAcmeChallenge,
+    ACME_CHALLENGE_PREFIX,
+    ACME_CHALLENGE_STATE_PATTERN,
+    ACME_TOKEN_REGEX,
+    type PublishedAcmeChallenge,
+} from './lib/acmeChallenge';
 export * from './lib/certificateManager';
 export * from './lib/securityChecker';
 export { createOAuth2Server } from './lib/oauth2';
