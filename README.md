@@ -258,7 +258,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.0.1 (2026-08-26)
 - (@GermanBluefox) HTTPS servers built from a certificate collection now also send the issuing chain from `collection.chain`. Only the leaf was sent before, so clients that do not already know the intermediate - `curl` and most non-browser HTTP clients - failed with `unable to get local issuer certificate`
 - (@GermanBluefox) `accessControl`: `accessControlAllowOrigin` now also accepts a function, so the allowed origin can be picked per request (`origin => origin` reflects it back)
 - (@GermanBluefox) `accessControl`: added `accessControlMaxAge`, and a concrete allowed origin is now sent together with `Vary: Origin`
