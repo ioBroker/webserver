@@ -92,6 +92,32 @@ function firstValue(value: unknown): string | undefined {
 }
 
 /**
+ * Build the CSP `form-action` source list that lets the browser follow the authorization response.
+ *
+ * The consent form posts back to us, but the answer to that POST is a redirect to the client's
+ * callback. Chromium and WebKit apply `form-action` to that redirect as well (Firefox does not), so
+ * a bare `'self'` makes them drop the response: the code is issued and then thrown away, and the
+ * user is left on the consent page. The redirect URI was validated against the client's registration
+ * before the page was rendered, so naming its origin here does not widen what the form can reach.
+ *
+ * @param redirectUri The verified redirect URI of the pending request
+ */
+function formActionSources(redirectUri: string): string {
+    let parsed: URL;
+    try {
+        parsed = new URL(redirectUri);
+    } catch {
+        // Unparseable URIs are rejected at registration time, so this cannot happen for a pending
+        // request — fall back to the strictest policy rather than guess.
+        return "'self'";
+    }
+    // Native apps get their callback on a private-use scheme (`myapp://cb`), for which there is no
+    // origin; those are allowed by scheme instead.
+    const client = parsed.origin && parsed.origin !== 'null' ? parsed.origin : parsed.protocol;
+    return `'self' ${client}`;
+}
+
+/**
  * Compare two strings without leaking their contents through timing differences.
  *
  * @param a First value
@@ -161,12 +187,12 @@ export class AuthorizationCodeFlow {
 
         if (this.options.dynamicClientRegistration !== false) {
             app.post('/oauth/register', (req: Request, res: Response): void => {
-                void this.handleRegister(req, res);
+                this.guard(res, this.handleRegister(req, res), true);
             });
         }
 
         app.post('/oauth/revoke', (req: Request, res: Response): void => {
-            void this.handleRevoke(req, res);
+            this.guard(res, this.handleRevoke(req, res), true);
         });
     }
 
@@ -215,11 +241,11 @@ export class AuthorizationCodeFlow {
         const app = this.options.app;
 
         app.get('/oauth/authorize', (req: Request, res: Response): void => {
-            void this.handleAuthorizeStart(req, res);
+            this.guard(res, this.handleAuthorizeStart(req, res), false);
         });
 
         app.post('/oauth/authorize', (req: Request, res: Response): void => {
-            void this.handleAuthorizeSubmit(req, res);
+            this.guard(res, this.handleAuthorizeSubmit(req, res), false);
         });
     }
 
@@ -618,6 +644,36 @@ export class AuthorizationCodeFlow {
     }
 
     /**
+     * Answer an unexpected rejection from a route handler instead of letting it escape.
+     *
+     * These handlers are started from synchronous Express callbacks, so a rejection nobody catches
+     * is an unhandled rejection — which terminates the host adapter's process on current Node
+     * versions, and leaves the request hanging either way.
+     *
+     * @param res The response to write to
+     * @param handler The already started handler
+     * @param json Whether this endpoint answers with JSON rather than an HTML page
+     */
+    private guard(res: Response, handler: Promise<void>, json: boolean): void {
+        handler.catch((e: Error) => {
+            this.adapter.log.error(`OAuth2 request failed: ${e.message}`);
+            if (res.headersSent) {
+                return;
+            }
+            if (json) {
+                res.status(500).json({ error: 'server_error' });
+            } else {
+                this.sendErrorPage(
+                    res,
+                    500,
+                    'Server error',
+                    'This request could not be processed. Please start again from the application.',
+                );
+            }
+        });
+    }
+
+    /**
      * Render the login form or the consent page, depending on whether the request already knows its user.
      *
      * @param res The response to write to
@@ -638,7 +694,7 @@ export class AuthorizationCodeFlow {
         </dl>
         <p class="hint">The application will be able to act with the permissions of this user.</p>
         ${errorBlock}
-        <form method="post" action="/oauth/authorize">
+        <form method="post" action="authorize">
             <input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
             <div class="buttons">
                 <button type="submit" name="action" value="deny" class="secondary">Deny</button>
@@ -648,7 +704,7 @@ export class AuthorizationCodeFlow {
             : `<h1>Sign in</h1>
         <p><strong>${clientName}</strong> is asking for access to your ${escapeHtml(this.productName)} installation.</p>
         ${errorBlock}
-        <form method="post" action="/oauth/authorize">
+        <form method="post" action="authorize">
             <input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
             <label for="username">User name</label>
             <input type="text" id="username" name="username" autocomplete="username" autofocus required>
@@ -661,7 +717,10 @@ export class AuthorizationCodeFlow {
         </form>`;
 
         res.set('Cache-Control', 'no-store');
-        res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'");
+        res.set(
+            'Content-Security-Policy',
+            `default-src 'none'; style-src 'unsafe-inline'; form-action ${formActionSources(pending.redirectUri)}`,
+        );
         res.status(200).send(this.htmlPage('Authorize', body));
     }
 

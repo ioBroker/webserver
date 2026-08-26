@@ -235,6 +235,9 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   ### **WORK IN PROGRESS**
 -->
 ### **WORK IN PROGRESS**
+- (@GermanBluefox) Fixed the OAuth2 consent page dropping the authorization response in Chromium and WebKit: `form-action` also applies to the redirect that follows the form POST, so the client's callback origin is now part of the policy. Clicking "Allow" appeared to do nothing and a second click reported "Request expired"
+- (@GermanBluefox) The login and consent forms now post to a relative URL, so the flow also works when the server is reverse-proxied under a path prefix
+- (@GermanBluefox) An unexpected error in an OAuth2 endpoint no longer escapes as an unhandled rejection (which terminates the host adapter); it is logged and answered with an error page
 - (@GermanBluefox) `WebServer` now answers ACME HTTP-01 challenges published by the acme adapter, so it no longer has to be stopped to free port 80 (opt out via `acmeChallenge: false`)
 - (@GermanBluefox) Exported `acmeChallengeMiddleware` and `serveAcmeChallenge` for adapters that build their server themselves
 - (@GermanBluefox) **BREAKING:** Updated `jwks-rsa` to 4.x. It depends on the ESM-only jose 6, so the minimal Node.js version is now 20.19 (or 22.12 / 23+)
