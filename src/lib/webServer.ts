@@ -9,13 +9,25 @@ export interface WebServerAccessControl {
     accessControlAllowHeaders?: string;
     /** Access-Control-Allow-Methods */
     accessControlAllowMethods?: string;
-    /** Access-Control-Allow-Origin */
-    accessControlAllowOrigin?: string;
+    /**
+     * Access-Control-Allow-Origin: either a literal value (`*` or one concrete origin) or a
+     * function picking one for the origin of the incoming request - `origin => origin` reflects
+     * it back, which is what a configuration that allows every origin with credentials needs.
+     */
+    accessControlAllowOrigin?: string | ((origin: string | undefined) => string | undefined);
     /** Access-Control-Expose-Headers */
     accessControlExposeHeaders?: string;
-    /** Access-Control-Request-Headers */
+    /** Access-Control-Max-Age, in seconds: how long a browser may cache the preflight result */
+    accessControlMaxAge?: number;
+    /**
+     * @deprecated `Access-Control-Request-Headers` is what the browser sends in a preflight; as a
+     * response header it has no effect. Only used as a fallback for {@link accessControlAllowHeaders}.
+     */
     accessControlRequestHeaders?: string;
-    /** Access-Control-Request-Method */
+    /**
+     * @deprecated `Access-Control-Request-Method` is what the browser sends in a preflight; as a
+     * response header it has no effect. Only used as a fallback for {@link accessControlAllowMethods}.
+     */
     accessControlRequestMethod?: string;
     /** Access-Control-Allow-Credentials */
     accessControlAllowCredentials?: boolean;
@@ -135,50 +147,72 @@ export class WebServer {
         };
     }
 
+    /**
+     * Put the configured CORS headers in front of the app.
+     *
+     * Outermost rather than as a route, so every answer carries them - including the ones the app
+     * produces before any middleware it registered later would run, such as the OAuth2 token
+     * endpoint or a 401 out of the authorization middleware.
+     */
     private initAccessControl(): void {
+        const accessControl = this.accessControl;
         if (
-            this.accessControl &&
-            (this.accessControl.accessControlAllowCredentials !== undefined ||
-                this.accessControl.accessControlAllowHeaders ||
-                this.accessControl.accessControlAllowMethods ||
-                this.accessControl.accessControlAllowOrigin ||
-                this.accessControl.accessControlExposeHeaders ||
-                this.accessControl.accessControlRequestHeaders ||
-                this.accessControl.accessControlRequestMethod)
+            !accessControl ||
+            (accessControl.accessControlAllowCredentials === undefined &&
+                !accessControl.accessControlAllowHeaders &&
+                !accessControl.accessControlAllowMethods &&
+                !accessControl.accessControlAllowOrigin &&
+                !accessControl.accessControlExposeHeaders &&
+                accessControl.accessControlMaxAge === undefined &&
+                !accessControl.accessControlRequestHeaders &&
+                !accessControl.accessControlRequestMethod)
         ) {
-            this.originalApp = this.app;
-            this.app = (req, res) => {
-                if (this.accessControl) {
-                    if (this.accessControl.accessControlAllowCredentials !== undefined) {
-                        res.setHeader(
-                            'Access-Control-Allow-Credentials',
-                            this.accessControl.accessControlAllowCredentials ? 'true' : 'false',
-                        );
-                    }
-                    if (this.accessControl.accessControlAllowHeaders) {
-                        res.setHeader('Access-Control-Allow-Headers', this.accessControl.accessControlAllowHeaders);
-                    }
-                    if (this.accessControl.accessControlAllowMethods) {
-                        res.setHeader('Access-Control-Allow-Methods', this.accessControl.accessControlAllowMethods);
-                    }
-                    if (this.accessControl.accessControlAllowOrigin) {
-                        res.setHeader('Access-Control-Allow-Origin', this.accessControl.accessControlAllowOrigin);
-                    }
-                    if (this.accessControl.accessControlExposeHeaders) {
-                        res.setHeader('Access-Control-Expose-Headers', this.accessControl.accessControlExposeHeaders);
-                    }
-                    if (this.accessControl.accessControlRequestHeaders) {
-                        res.setHeader('Access-Control-Request-Headers', this.accessControl.accessControlRequestHeaders);
-                    }
-                    if (this.accessControl.accessControlRequestMethod) {
-                        res.setHeader('Access-Control-Request-Method', this.accessControl.accessControlRequestMethod);
-                    }
-                }
-
-                // @ts-expect-error this.originalApp is set
-                return this.originalApp(req, res);
-            };
+            return;
         }
+
+        // The deprecated `Request-*` options are request headers and were never valid on a
+        // response, so whoever set them meant the `Allow-*` ones. They only fill in when the
+        // correct option is absent.
+        const allowHeaders = accessControl.accessControlAllowHeaders || accessControl.accessControlRequestHeaders;
+        const allowMethods = accessControl.accessControlAllowMethods || accessControl.accessControlRequestMethod;
+
+        this.originalApp = this.app;
+        this.app = (req, res) => {
+            if (accessControl.accessControlAllowCredentials !== undefined) {
+                res.setHeader(
+                    'Access-Control-Allow-Credentials',
+                    accessControl.accessControlAllowCredentials ? 'true' : 'false',
+                );
+            }
+            if (allowHeaders) {
+                res.setHeader('Access-Control-Allow-Headers', allowHeaders);
+            }
+            if (allowMethods) {
+                res.setHeader('Access-Control-Allow-Methods', allowMethods);
+            }
+
+            const origin =
+                typeof accessControl.accessControlAllowOrigin === 'function'
+                    ? accessControl.accessControlAllowOrigin(req.headers.origin)
+                    : accessControl.accessControlAllowOrigin;
+            if (origin) {
+                res.setHeader('Access-Control-Allow-Origin', origin);
+                if (origin !== '*') {
+                    // The answer depends on the origin, so a cache must not hand it to another one.
+                    res.setHeader('Vary', 'Origin');
+                }
+            }
+
+            if (accessControl.accessControlExposeHeaders) {
+                res.setHeader('Access-Control-Expose-Headers', accessControl.accessControlExposeHeaders);
+            }
+            if (accessControl.accessControlMaxAge !== undefined) {
+                res.setHeader('Access-Control-Max-Age', accessControl.accessControlMaxAge.toString());
+            }
+
+            // @ts-expect-error this.originalApp is set
+            return this.originalApp(req, res);
+        };
     }
 
     /**
@@ -343,6 +377,53 @@ export class WebServer {
     }
 
     /**
+     * Assemble the certificate a secure context has to present for a collection.
+     *
+     * `cert` holds the leaf only - the issuing chain lives in `chain`, and without it every
+     * client that does not already know the intermediate rejects the connection. Producers
+     * disagree on whether `chain` repeats the leaf, so it is normalized here.
+     *
+     * @param collection the certificate collection
+     */
+    private static buildCertificateChain(collection: CertificateCollection): string {
+        const leaf = WebServer.splitCertificates(collection.cert);
+        const issuers = WebServer.splitCertificates(collection.chain).filter(cert => !leaf.includes(cert));
+        const bundle = leaf.concat(issuers);
+
+        if (!bundle.length) {
+            // Nothing parseable in there - hand the raw value on and let TLS report what is wrong.
+            return collection.cert.toString();
+        }
+
+        // Joined by a newline, never by an empty string: OpenSSL only recognizes a BEGIN marker
+        // at the start of a line and would silently drop every certificate after the first.
+        return `${bundle.join('\n')}\n`;
+    }
+
+    /**
+     * Cut a collection field into its individual PEM certificates.
+     *
+     * The field may be a single certificate, a whole concatenated chain or an array of either,
+     * as string or as Buffer - which one it is depends on who wrote the collection.
+     *
+     * @param source the collection field to read
+     */
+    private static splitCertificates(source: CertificateCollection['chain']): string[] {
+        const parts = Array.isArray(source) ? source : source ? [source] : [];
+        const certificates: string[] = [];
+
+        for (const part of parts) {
+            // A base64 body never contains a dash, so the end of a block is unambiguous.
+            const found = part.toString().match(/-----BEGIN CERTIFICATE-----[^-]+-----END CERTIFICATE-----/g);
+            if (found) {
+                certificates.push(...found);
+            }
+        }
+
+        return certificates;
+    }
+
+    /**
      * Build secure context from certificate collections
      *
      * @param collections the certificate collections
@@ -355,7 +436,7 @@ export class WebServer {
             for (const [collectionId, collection] of Object.entries(collections)) {
                 const context = tls.createSecureContext({
                     key: collection.key,
-                    cert: collection.cert,
+                    cert: WebServer.buildCertificateChain(collection),
                 });
 
                 for (const domain of collection.domains) {

@@ -85,6 +85,30 @@ app.use(acmeChallengeMiddleware(adapter));
 
 `serveAcmeChallenge(adapter, req, res)` is the same thing for a plain `http.RequestListener`; it resolves to `true` when it answered the request.
 
+## CORS / access control
+
+`accessControl` puts the CORS headers in front of the app, so every answer carries them:
+
+```typescript
+const webServer = new WebServer({
+    app,
+    adapter,
+    secure: true,
+    accessControl: {
+        // A literal origin, `*`, or a function picking one per request
+        accessControlAllowOrigin: origin => origin,
+        accessControlAllowMethods: 'GET,PUT,POST,DELETE,OPTIONS',
+        accessControlAllowHeaders: 'Content-Type, Authorization',
+        accessControlAllowCredentials: true,
+        accessControlMaxAge: 600,
+    },
+});
+```
+
+Doing it here rather than as an Express middleware matters when the app registers routes that answer without calling `next()`: an `app.use()` added after `createOAuth2Server()` never sees `POST /oauth/token`, so that answer would go out without any CORS header. A concrete origin is sent together with `Vary: Origin`; `*` is not.
+
+`accessControlRequestHeaders` and `accessControlRequestMethod` are deprecated - those are request headers a browser sends in a preflight and never did anything on a response. They now only fill in for `accessControlAllowHeaders` / `accessControlAllowMethods`.
+
 ## OAuth2 support
 You can activate the OAuth2 support for the webserver. To do this, add the following code after the server is initialized:
 
@@ -234,6 +258,12 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) HTTPS servers built from a certificate collection now also send the issuing chain from `collection.chain`. Only the leaf was sent before, so clients that do not already know the intermediate - `curl` and most non-browser HTTP clients - failed with `unable to get local issuer certificate`
+- (@GermanBluefox) `accessControl`: `accessControlAllowOrigin` now also accepts a function, so the allowed origin can be picked per request (`origin => origin` reflects it back)
+- (@GermanBluefox) `accessControl`: added `accessControlMaxAge`, and a concrete allowed origin is now sent together with `Vary: Origin`
+- (@GermanBluefox) `accessControl`: `accessControlRequestHeaders` and `accessControlRequestMethod` are deprecated. They are request headers a browser sends in a preflight and had no effect as response headers; they now serve as a fallback for `accessControlAllowHeaders` / `accessControlAllowMethods`
+
 ### 3.0.0 (2026-08-26)
 - (@GermanBluefox) Fixed the OAuth2 consent page dropping the authorization response in Chromium and WebKit: `form-action` also applies to the redirect that follows the form POST, so the client's callback origin is now part of the policy. Clicking "Allow" appeared to do nothing and a second click reported "Request expired"
 - (@GermanBluefox) The login and consent forms now post to a relative URL, so the flow also works when the server is reverse-proxied under a path prefix
