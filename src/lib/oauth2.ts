@@ -368,9 +368,12 @@ export function createOAuth2Server(
                     sameSite: 'strict', // Prevents the browser from sending this cookie along with cross-site requests (optional)
                 };
 
-                // If expires omitted or set to 0, the cookie will expire at the end of the session (when the browser closes).
-                if (req.body.stayloggedin === 'true') {
-                    cookieOptions.expires = token.accessTokenExpiresAt;
+                // Without a lifetime the cookie ends with the browser session. With "stay logged in" it lives as
+                // long as the access token. `maxAge` is relative to the clock of the browser; `expires` would be
+                // an absolute date from the server clock, and a server with a wrong time (a board without a
+                // real-time clock before NTP kicks in) would hand out cookies the browser drops at once.
+                if (req.body.stayloggedin === 'true' && token.accessTokenExpiresAt) {
+                    cookieOptions.maxAge = Math.max(0, token.accessTokenExpiresAt.getTime() - Date.now());
                 }
 
                 // Store the access token in a cookie named "access_token"
