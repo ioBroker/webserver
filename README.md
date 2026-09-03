@@ -258,7 +258,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.0.2 (2026-09-03)
 - (@GermanBluefox) The `access_token` cookie of a "stay logged in" login gets its lifetime as `Max-Age` (relative to the browser clock) instead of `Expires` (an absolute date from the server clock): a server with a wrong time handed out cookies the browser dropped at once
 
 ### 3.0.1 (2026-08-26)
