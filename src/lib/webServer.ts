@@ -51,13 +51,14 @@ interface WebServerOptions<Http2 extends boolean> {
     acmeChallenge?: boolean;
     /**
      * Speak HTTP/2 on a secure server, with HTTP/1.1 as fallback for clients that do not offer it.
-     * Has no effect without `secure`: browsers use HTTP/2 over TLS only. WebSocket upgrades keep
-     * working, a browser opens them on a separate HTTP/1.1 connection.
+     * Enabled by default; set to false to stay with HTTP/1.1. Has no effect without `secure`: browsers
+     * use HTTP/2 over TLS only. WebSocket upgrades keep working, a browser opens them on a separate
+     * HTTP/1.1 connection.
      */
     http2?: Http2;
 }
 
-/** The server `init()` resolves to - an HTTP/2 server only if the `http2` option may be set */
+/** The server `init()` resolves to - an HTTP/2 server unless the `http2` option is `false` */
 type WebServerInstance<Http2 extends boolean> = Http2 extends false
     ? http.Server | https.Server
     : http.Server | https.Server | http2.Http2SecureServer;
@@ -82,7 +83,7 @@ interface Certificates {
     ca?: string;
 }
 
-export class WebServer<Http2 extends boolean = false> {
+export class WebServer<Http2 extends boolean = true> {
     private server: http.Server | https.Server | http2.Http2SecureServer | undefined;
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
@@ -234,7 +235,7 @@ export class WebServer<Http2 extends boolean = false> {
      * Initialize a new https / http server; according to configuration, it will be present on `this.server`
      */
     async init(): Promise<WebServerInstance<Http2>> {
-        // Only an HTTP/2 server when the `http2` option allowed one, which is what the type says
+        // Only an HTTP/2 server when the `http2` option was not false, which is what the type says
         return (await this.createServer()) as WebServerInstance<Http2>;
     }
 

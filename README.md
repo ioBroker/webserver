@@ -87,10 +87,14 @@ app.use(acmeChallengeMiddleware(adapter));
 
 ## HTTP/2
 
-With `http2: true` a secure server speaks HTTP/2, and HTTP/1.1 to every client that does not offer HTTP/2 (default active):
+A secure server speaks HTTP/2, and HTTP/1.1 to every client that does not offer HTTP/2. This is on by default:
 
 ```typescript
-const webServer = new WebServer({ app, adapter, secure: true, http2: true });
+// HTTP/2 with HTTP/1.1 fallback
+const webServer = new WebServer({ app, adapter, secure: true });
+
+// HTTP/1.1 only
+const webServer = new WebServer({ app, adapter, secure: true, http2: false });
 ```
 
 Without `secure` the option has no effect - browsers use HTTP/2 over TLS only.
@@ -98,7 +102,7 @@ Without `secure` the option has no effect - browsers use HTTP/2 over TLS only.
 -   **Express works unchanged.** Express replaces the prototype of every request and response with its own HTTP/1 one, which breaks the HTTP/2 compat objects (the first body read even crashes the process). `WebServer` pins the HTTP/2 members to each request and response beforehand, fills in the `host` header from `:authority` and drops HTTP/1 connection headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, ...) an app sets on the response, which HTTP/2 forbids.
 -   **WebSockets keep working.** Browsers open them on a separate HTTP/1.1 connection, which the server hands to its `upgrade` listeners as before (`ws`, `socket.io`, `@iobroker/ws-server`).
 -   **`close()` does not hang** on HTTP/2 sessions a browser keeps open: they are closed gracefully along with the server.
--   **Types:** `init()` only includes `http2.Http2SecureServer` in its result type if `http2` may be `true`; code that does not set the option keeps getting `http.Server | https.Server`.
+-   **Types:** `init()` resolves to `http.Server | https.Server | http2.Http2SecureServer`, and to `http.Server | https.Server` only with `http2: false`. `Http2SecureServer` lacks some `http.Server` members, e.g. `closeAllConnections()` and `maxHeadersCount`.
 
 ## CORS / access control
 
@@ -273,7 +277,8 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### 3.1.0 (2026-09-18)
+### **WORK IN PROGRESS**
+- (@GermanBluefox) The result type of `init()` now includes `http2.Http2SecureServer` unless `http2: false` is set, matching the default of the `http2` option since 3.1.0. It claimed `http.Server | https.Server` before, so members that an HTTP/2 server does not have - like `closeAllConnections()` - compiled and failed at runtime
 - (@GermanBluefox) Added the `http2` option: a secure server speaks HTTP/2 with HTTP/1.1 fallback. Express apps, body parsers, WebSocket upgrades and `close()` keep working unchanged
 
 ### 3.0.2 (2026-09-03)
