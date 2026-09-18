@@ -273,7 +273,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.1.0 (2026-09-18)
 - (@GermanBluefox) Added the `http2` option: a secure server speaks HTTP/2 with HTTP/1.1 fallback. Express apps, body parsers, WebSocket upgrades and `close()` keep working unchanged
 
 ### 3.0.2 (2026-09-03)
