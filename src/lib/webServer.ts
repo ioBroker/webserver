@@ -1,8 +1,10 @@
 import tls from 'node:tls';
 import http from 'node:http';
-import https, { type ServerOptions } from 'node:https';
+import https from 'node:https';
+import http2 from 'node:http2';
 import { type CertificateCollection, CertificateManager } from './certificateManager';
 import { ACME_CHALLENGE_PREFIX, serveAcmeChallenge } from './acmeChallenge';
+import { adaptHttp2Request } from './http2Compat';
 
 export interface WebServerAccessControl {
     /** Access-Control-Allow-Headers */
@@ -33,7 +35,7 @@ export interface WebServerAccessControl {
     accessControlAllowCredentials?: boolean;
 }
 
-interface WebServerOptions {
+interface WebServerOptions<Http2 extends boolean> {
     /** the ioBroker adapter */
     adapter: ioBroker.Adapter;
     app?: http.RequestListener | null;
@@ -47,7 +49,18 @@ interface WebServerOptions {
      * to false to keep `/.well-known/acme-challenge/` entirely to the app.
      */
     acmeChallenge?: boolean;
+    /**
+     * Speak HTTP/2 on a secure server, with HTTP/1.1 as fallback for clients that do not offer it.
+     * Has no effect without `secure`: browsers use HTTP/2 over TLS only. WebSocket upgrades keep
+     * working, a browser opens them on a separate HTTP/1.1 connection.
+     */
+    http2?: Http2;
 }
+
+/** The server `init()` resolves to - an HTTP/2 server only if the `http2` option may be set */
+type WebServerInstance<Http2 extends boolean> = Http2 extends false
+    ? http.Server | https.Server
+    : http.Server | https.Server | http2.Http2SecureServer;
 
 interface AdapterConfig {
     /** Collection ID */
@@ -69,8 +82,8 @@ interface Certificates {
     ca?: string;
 }
 
-export class WebServer {
-    private server: http.Server | https.Server | undefined;
+export class WebServer<Http2 extends boolean = false> {
+    private server: http.Server | https.Server | http2.Http2SecureServer | undefined;
     private readonly adapter: ioBroker.Adapter;
     private readonly secure: boolean;
     private app?: http.RequestListener;
@@ -78,8 +91,9 @@ export class WebServer {
     private readonly certManager: CertificateManager | undefined;
     private readonly accessControl: WebServerAccessControl | undefined;
     private readonly acmeChallenge: boolean;
+    private readonly http2: boolean;
 
-    constructor(options: WebServerOptions) {
+    constructor(options: WebServerOptions<Http2>) {
         this.secure = !!options.secure;
         this.adapter = options.adapter;
         this.app = options.app || undefined;
@@ -88,6 +102,7 @@ export class WebServer {
         }
         this.accessControl = options.accessControl;
         this.acmeChallenge = options.acmeChallenge !== false;
+        this.http2 = options.http2 !== false && this.secure;
     }
 
     /**
@@ -218,7 +233,55 @@ export class WebServer {
     /**
      * Initialize a new https / http server; according to configuration, it will be present on `this.server`
      */
-    async init(): Promise<http.Server | https.Server> {
+    async init(): Promise<WebServerInstance<Http2>> {
+        // Only an HTTP/2 server when the `http2` option allowed one, which is what the type says
+        return (await this.createServer()) as WebServerInstance<Http2>;
+    }
+
+    /**
+     * Create a secure server: HTTP/2 with HTTP/1.1 fallback if enabled, plain HTTPS otherwise
+     *
+     * @param options TLS options with the certificates or the SNI callback
+     */
+    private createSecureServer(options: tls.TlsOptions): https.Server | http2.Http2SecureServer {
+        if (!this.http2) {
+            return https.createServer(options, this.app);
+        }
+
+        this.adapter.log.debug('Using HTTP/2 with HTTP/1.1 fallback');
+        const app = this.app;
+        const listener = (
+            req: http2.Http2ServerRequest | http.IncomingMessage,
+            res: http2.Http2ServerResponse | http.ServerResponse,
+        ): void => {
+            // A client that did not offer HTTP/2 arrives here as a plain HTTP/1.1 request
+            if (req instanceof http2.Http2ServerRequest) {
+                adaptHttp2Request(req, res as http2.Http2ServerResponse);
+            }
+            app!(req as http.IncomingMessage, res as http.ServerResponse);
+        };
+        const server = http2.createSecureServer({ ...options, allowHTTP1: true }, app && listener);
+
+        // close() only stops accepting new connections. A browser keeps its HTTP/2 session open for as long as
+        // it likes, and the close callback would never be called - while the session goes on serving the app.
+        // An HTTP/1.1 connection is no issue: an idle one is closed by close() itself.
+        const sessions = new Set<http2.ServerHttp2Session>();
+        server.on('session', session => {
+            sessions.add(session);
+            session.once('close', () => sessions.delete(session));
+        });
+        const close = server.close.bind(server);
+        server.close = (callback?: (err?: Error) => void) => {
+            close(callback);
+            // Graceful: the streams in flight are finished, then the session is gone
+            sessions.forEach(session => session.close());
+            return server;
+        };
+
+        return server;
+    }
+
+    private async createServer(): Promise<http.Server | https.Server | http2.Http2SecureServer> {
         if (!this.certManager) {
             this.adapter.log.debug('Secure connection not enabled - using http createServer');
             this.prepareApp();
@@ -251,7 +314,7 @@ export class WebServer {
                 this.prepareApp();
                 if (customCertificates) {
                     this.adapter.log.warn('Falling back to self-signed certificates or to custom certificates');
-                    this.server = https.createServer(customCertificates as ServerOptions, this.app);
+                    this.server = this.createSecureServer(customCertificates);
                 } else {
                     // This really should never happen as customCertificatesContext should always be available
                     this.adapter.log.error(
@@ -268,7 +331,7 @@ export class WebServer {
 
             if (customCertificates) {
                 this.adapter.log.debug('Use self-signed certificates or custom certificates');
-                this.server = https.createServer(customCertificates as ServerOptions, this.app);
+                this.server = this.createSecureServer(customCertificates);
             } else {
                 // This really should never happen as customCertificatesContext should always be available
                 this.adapter.log.error(
@@ -372,7 +435,7 @@ export class WebServer {
 
         this.prepareApp();
         this.adapter.log.debug('Using https createServer');
-        this.server = https.createServer(options, this.app);
+        this.server = this.createSecureServer(options);
         return this.server;
     }
 

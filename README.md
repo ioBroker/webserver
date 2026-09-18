@@ -85,6 +85,21 @@ app.use(acmeChallengeMiddleware(adapter));
 
 `serveAcmeChallenge(adapter, req, res)` is the same thing for a plain `http.RequestListener`; it resolves to `true` when it answered the request.
 
+## HTTP/2
+
+With `http2: true` a secure server speaks HTTP/2, and HTTP/1.1 to every client that does not offer HTTP/2 (default active):
+
+```typescript
+const webServer = new WebServer({ app, adapter, secure: true, http2: true });
+```
+
+Without `secure` the option has no effect - browsers use HTTP/2 over TLS only.
+
+-   **Express works unchanged.** Express replaces the prototype of every request and response with its own HTTP/1 one, which breaks the HTTP/2 compat objects (the first body read even crashes the process). `WebServer` pins the HTTP/2 members to each request and response beforehand, fills in the `host` header from `:authority` and drops HTTP/1 connection headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, ...) an app sets on the response, which HTTP/2 forbids.
+-   **WebSockets keep working.** Browsers open them on a separate HTTP/1.1 connection, which the server hands to its `upgrade` listeners as before (`ws`, `socket.io`, `@iobroker/ws-server`).
+-   **`close()` does not hang** on HTTP/2 sessions a browser keeps open: they are closed gracefully along with the server.
+-   **Types:** `init()` only includes `http2.Http2SecureServer` in its result type if `http2` may be `true`; code that does not set the option keeps getting `http.Server | https.Server`.
+
 ## CORS / access control
 
 `accessControl` puts the CORS headers in front of the app, so every answer carries them:
@@ -258,6 +273,9 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Added the `http2` option: a secure server speaks HTTP/2 with HTTP/1.1 fallback. Express apps, body parsers, WebSocket upgrades and `close()` keep working unchanged
+
 ### 3.0.2 (2026-09-03)
 - (@GermanBluefox) The `access_token` cookie of a "stay logged in" login gets its lifetime as `Max-Age` (relative to the browser clock) instead of `Expires` (an absolute date from the server clock): a server with a wrong time handed out cookies the browser dropped at once
 
