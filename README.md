@@ -277,7 +277,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.1.1 (2026-09-18)
 - (@GermanBluefox) The result type of `init()` now includes `http2.Http2SecureServer` unless `http2: false` is set, matching the default of the `http2` option since 3.1.0. It claimed `http.Server | https.Server` before, so members that an HTTP/2 server does not have - like `closeAllConnections()` - compiled and failed at runtime
 - (@GermanBluefox) Added the `http2` option: a secure server speaks HTTP/2 with HTTP/1.1 fallback. Express apps, body parsers, WebSocket upgrades and `close()` keep working unchanged
 
