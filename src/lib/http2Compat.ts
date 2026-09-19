@@ -74,6 +74,15 @@ responseMembers.writeHead.value = function (this: http2.Http2ServerResponse, ...
         ),
     );
 };
+// HTTP/1 only, so covered with `undefined` above. express-session calls it whenever it saves the session
+// before the response ends - with `resave` on every response - and each of them failed with
+// `res._implicitHeader is not a function`. HTTP/1 does `this.writeHead(this.statusCode)`; only once here,
+// as HTTP/2 throws on a second writeHead().
+responseMembers._implicitHeader.value = function (this: http2.Http2ServerResponse): void {
+    if (!this.headersSent) {
+        this.writeHead(this.statusCode);
+    }
+};
 
 /**
  * Make an HTTP/2 compat request and response usable for apps written against HTTP/1.

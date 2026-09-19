@@ -99,7 +99,7 @@ const webServer = new WebServer({ app, adapter, secure: true, http2: false });
 
 Without `secure` the option has no effect - browsers use HTTP/2 over TLS only.
 
--   **Express works unchanged.** Express replaces the prototype of every request and response with its own HTTP/1 one, which breaks the HTTP/2 compat objects (the first body read even crashes the process). `WebServer` pins the HTTP/2 members to each request and response beforehand, fills in the `host` header from `:authority` and drops HTTP/1 connection headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, ...) an app sets on the response, which HTTP/2 forbids.
+-   **Express works unchanged.** Express replaces the prototype of every request and response with its own HTTP/1 one, which breaks the HTTP/2 compat objects (the first body read even crashes the process). `WebServer` pins the HTTP/2 members to each request and response beforehand, fills in the `host` header from `:authority`, gives each response the `_implicitHeader()` of HTTP/1 that express-session relies on, and drops HTTP/1 connection headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, ...) an app sets on the response, which HTTP/2 forbids.
 -   **WebSockets keep working.** Browsers open them on a separate HTTP/1.1 connection, which the server hands to its `upgrade` listeners as before (`ws`, `socket.io`, `@iobroker/ws-server`).
 -   **`close()` does not hang** on HTTP/2 sessions a browser keeps open: they are closed gracefully along with the server.
 -   **Types:** `init()` resolves to `http.Server | https.Server | http2.Http2SecureServer`, and to `http.Server | https.Server` only with `http2: false`. `Http2SecureServer` lacks some `http.Server` members, e.g. `closeAllConnections()` and `maxHeadersCount`.
@@ -277,6 +277,9 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) HTTP/2: responses now have `_implicitHeader()`, which HTTP/1 responses have and express-session calls whenever it saves the session before the response ends. With `resave`, every response of an app using express-session failed with `res._implicitHeader is not a function`
+
 ### 3.1.1 (2026-09-18)
 - (@GermanBluefox) The result type of `init()` now includes `http2.Http2SecureServer` unless `http2: false` is set, matching the default of the `http2` option since 3.1.0. It claimed `http.Server | https.Server` before, so members that an HTTP/2 server does not have - like `closeAllConnections()` - compiled and failed at runtime
 - (@GermanBluefox) Added the `http2` option: a secure server speaks HTTP/2 with HTTP/1.1 fallback. Express apps, body parsers, WebSocket upgrades and `close()` keep working unchanged
