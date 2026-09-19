@@ -277,7 +277,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.1.2 (2026-09-19)
 - (@GermanBluefox) HTTP/2: responses now have `_implicitHeader()`, which HTTP/1 responses have and express-session calls whenever it saves the session before the response ends. With `resave`, every response of an app using express-session failed with `res._implicitHeader is not a function`
 
 ### 3.1.1 (2026-09-18)
