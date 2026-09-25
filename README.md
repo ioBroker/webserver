@@ -325,7 +325,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.2.2 (2026-09-25)
 - (@GermanBluefox) `WebServer` now reports the port it listens on to the per-host registry of used resources of js-controller 8 and frees the entry when the server is closed, so the occupied port of an adapter is the one it really bound to instead of the `native.port` js-controller derives it from. Nothing is sent unless `supportsFeature('CONTROLLER_USED_RESOURCES')` says the controller keeps the registry, so an older js-controller is unaffected. Requires `"declareUsedResources": true` in `common` of the `io-package.json`; opt out with `usedResources: false`. `trackUsedPort()`, `registerUsedPort()`, `freeUsedPort()` and `supportsUsedResources()` are the same for adapters building their own server
 
 ### 3.1.2 (2026-09-19)
