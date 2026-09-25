@@ -104,6 +104,54 @@ Without `secure` the option has no effect - browsers use HTTP/2 over TLS only.
 -   **`close()` does not hang** on HTTP/2 sessions a browser keeps open: they are closed gracefully along with the server.
 -   **Types:** `init()` resolves to `http.Server | https.Server | http2.Http2SecureServer`, and to `http.Server | https.Server` only with `http2: false`. `Http2SecureServer` lacks some `http.Server` members, e.g. `closeAllConnections()` and `maxHeadersCount`.
 
+## Used resources
+
+`js-controller` 8 keeps a per-host registry of the exclusive resources its instances occupy - the ones only a single instance can hold at a time, such as a TCP port - under `system.host.<hostname>.usedResources.<type>`. It answers "which port is already spoken for on this host", so a user configuring a new instance can pick a free one instead of running into `EADDRINUSE`.
+
+`WebServer` reports its port there by itself: it registers what the server bound to once it listens, and frees the entry when the server closes again.
+
+```json5
+// io-package.json - without this js-controller derives the entry from native.port instead
+{
+    "common": {
+        "declareUsedResources": true
+    }
+}
+```
+
+```typescript
+// Nothing else to do - this is on by default
+const webServer = new WebServer({ app, adapter, secure: true });
+const server = await webServer.init();
+server.listen(port, bind); // registered from here on, freed on close()
+
+// Opt out
+const webServer = new WebServer({ app, adapter, secure: true, usedResources: false });
+```
+
+-   The port is taken from the **listening server**, not from the configuration, so what is registered is what was really bound - including the address (`family` only for a concrete one: a wildcard listener occupies the port in both families).
+-   **The feature is asked for before anything is sent.** `adapter.supportsFeature('CONTROLLER_USED_RESOURCES')` has to say yes and the adapter's `@iobroker/adapter-core` has to have the methods - a host that does not know `registerUsedResource` never answers, so every call would first sit out the five second timeout of the adapter API. Without both, nothing is sent and a debug line says which half is missing.
+-   Without `common.declareUsedResources` nothing is reported either (js-controller derives the entry from `native.port` and would refuse the registration). The server is unaffected in every case; a registration the host refuses is logged, never thrown.
+-   Freeing happens on `close()`. An instance that is stopped or crashes without closing keeps its entry, which the host marks as no longer held.
+
+An adapter that builds its server without `WebServer`, or listens on more than one port, can report the same way:
+
+```typescript
+import { trackUsedPort, registerUsedPort, freeUsedPort, supportsUsedResources } from '@iobroker/webserver';
+
+// Bound to the lifetime of a server: registered on `listening`, freed on `close`
+const stopTracking = trackUsedPort(adapter, server);
+
+// Or one-shot, for a port that is not owned by a `net.Server`
+await registerUsedPort(adapter, { port: 1883 });
+await freeUsedPort(adapter, { port: 1883 });
+
+// All of them check this themselves; it is exported for an adapter that wants to know beforehand
+if (supportsUsedResources(adapter)) {
+    // this js-controller keeps the registry and this adapter-core can talk to it
+}
+```
+
 ## CORS / access control
 
 `accessControl` puts the CORS headers in front of the app, so every answer carries them:
@@ -277,6 +325,9 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) `WebServer` now reports the port it listens on to the per-host registry of used resources of js-controller 8 and frees the entry when the server is closed, so the occupied port of an adapter is the one it really bound to instead of the `native.port` js-controller derives it from. Nothing is sent unless `supportsFeature('CONTROLLER_USED_RESOURCES')` says the controller keeps the registry, so an older js-controller is unaffected. Requires `"declareUsedResources": true` in `common` of the `io-package.json`; opt out with `usedResources: false`. `trackUsedPort()`, `registerUsedPort()`, `freeUsedPort()` and `supportsUsedResources()` are the same for adapters building their own server
+
 ### 3.1.2 (2026-09-19)
 - (@GermanBluefox) HTTP/2: responses now have `_implicitHeader()`, which HTTP/1 responses have and express-session calls whenever it saves the session before the response ends. With `resave`, every response of an app using express-session failed with `res._implicitHeader is not a function`
 

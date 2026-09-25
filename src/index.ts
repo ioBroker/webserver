@@ -9,6 +9,13 @@ export {
     ACME_TOKEN_REGEX,
     type PublishedAcmeChallenge,
 } from './lib/acmeChallenge';
+export {
+    trackUsedPort,
+    registerUsedPort,
+    freeUsedPort,
+    supportsUsedResources,
+    type UsedTcpPort,
+} from './lib/usedResources';
 export * from './lib/certificateManager';
 export * from './lib/securityChecker';
 export { createOAuth2Server } from './lib/oauth2';

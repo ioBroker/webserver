@@ -5,6 +5,7 @@ import http2 from 'node:http2';
 import { type CertificateCollection, CertificateManager } from './certificateManager';
 import { ACME_CHALLENGE_PREFIX, serveAcmeChallenge } from './acmeChallenge';
 import { adaptHttp2Request } from './http2Compat';
+import { trackUsedPort } from './usedResources';
 
 export interface WebServerAccessControl {
     /** Access-Control-Allow-Headers */
@@ -56,6 +57,15 @@ interface WebServerOptions<Http2 extends boolean> {
      * HTTP/1.1 connection.
      */
     http2?: Http2;
+    /**
+     * Report the port the server listens on to the registry of exclusive resources js-controller 8
+     * keeps per host, and take the entry back when the server closes. Enabled by default.
+     *
+     * Requires `"declareUsedResources": true` in the `common` part of the adapter's `io-package.json`
+     * - without it js-controller derives the entry from `native.port` and refuses a registration.
+     * Does nothing on an older controller.
+     */
+    usedResources?: boolean;
 }
 
 /** The server `init()` resolves to - an HTTP/2 server unless the `http2` option is `false` */
@@ -93,6 +103,9 @@ export class WebServer<Http2 extends boolean = true> {
     private readonly accessControl: WebServerAccessControl | undefined;
     private readonly acmeChallenge: boolean;
     private readonly http2: boolean;
+    private readonly usedResources: boolean;
+    /** Stops reporting the listening port, set once `init()` created the server */
+    private stopTrackingPort: (() => void) | undefined;
 
     constructor(options: WebServerOptions<Http2>) {
         this.secure = !!options.secure;
@@ -104,6 +117,7 @@ export class WebServer<Http2 extends boolean = true> {
         this.accessControl = options.accessControl;
         this.acmeChallenge = options.acmeChallenge !== false;
         this.http2 = options.http2 !== false && this.secure;
+        this.usedResources = options.usedResources !== false;
     }
 
     /**
@@ -235,8 +249,28 @@ export class WebServer<Http2 extends boolean = true> {
      * Initialize a new https / http server; according to configuration, it will be present on `this.server`
      */
     async init(): Promise<WebServerInstance<Http2>> {
+        const server = await this.createServer();
+
+        if (this.usedResources) {
+            // The caller is the one calling listen(), so the port is picked up from the server when
+            // it is up rather than from the configuration - which may not be what was really bound.
+            this.stopTrackingPort?.();
+            this.stopTrackingPort = trackUsedPort(this.adapter, server);
+        }
+
         // Only an HTTP/2 server when the `http2` option was not false, which is what the type says
-        return (await this.createServer()) as WebServerInstance<Http2>;
+        return server as WebServerInstance<Http2>;
+    }
+
+    /**
+     * Stop reporting the listening port to js-controller and free an entry that is still registered.
+     *
+     * Only needed when the server is thrown away without being closed - a `close()` frees the entry
+     * by itself, and a stopped instance has its entries released by the host.
+     */
+    unregisterUsedResources(): void {
+        this.stopTrackingPort?.();
+        this.stopTrackingPort = undefined;
     }
 
     /**
