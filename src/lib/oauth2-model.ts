@@ -112,10 +112,8 @@ export class OAuth2Model implements RefreshTokenModel {
      *
      * @param bearerToken The access token to look up
      */
-    getTokenInfo = async (bearerToken: string): Promise<InternalStorageToken | null> => {
-        return new Promise<InternalStorageToken | null>(resolve =>
-            this.adapter.getSession(`a:${bearerToken}`, resolve),
-        );
+    getTokenInfo = async (bearerToken: string): Promise<ioBroker.Session | null> => {
+        return new Promise<ioBroker.Session | null>(resolve => this.adapter.getSession(`a:${bearerToken}`, resolve));
     };
 
     /**
@@ -253,7 +251,7 @@ export class OAuth2Model implements RefreshTokenModel {
      * Get refresh token.
      */
     getRefreshToken = async (bearerToken: string): Promise<RefreshToken | Falsey> => {
-        const token = await new Promise<InternalStorageToken | null>(resolve =>
+        const token = await new Promise<ioBroker.Session | null>(resolve =>
             this.adapter.getSession(`r:${bearerToken}`, resolve),
         );
         if (!token) {
@@ -406,10 +404,8 @@ export class OAuth2Model implements RefreshTokenModel {
      */
     revokeTokenPair = async (token: string): Promise<boolean> => {
         const stored =
-            (await new Promise<InternalStorageToken | null>(resolve =>
-                this.adapter.getSession(`a:${token}`, resolve),
-            )) ||
-            (await new Promise<InternalStorageToken | null>(resolve => this.adapter.getSession(`r:${token}`, resolve)));
+            (await new Promise<ioBroker.Session | null>(resolve => this.adapter.getSession(`a:${token}`, resolve))) ||
+            (await new Promise<ioBroker.Session | null>(resolve => this.adapter.getSession(`r:${token}`, resolve)));
 
         if (!stored) {
             return false;
