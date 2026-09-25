@@ -397,7 +397,7 @@ export function createOAuth2Server(
         }
 
         if (accessToken) {
-            void adapter.getSession(`a:${accessToken}`, (obj: InternalStorageToken): void => {
+            void adapter.getSession(`a:${accessToken}`, (obj: ioBroker.Session | null): void => {
                 res.clearCookie('access_token');
 
                 if (obj) {
