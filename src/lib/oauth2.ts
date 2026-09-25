@@ -3,7 +3,7 @@ import OAuth2Server, { Request as OAuthRequest, Response as OAuthResponse, type 
 import { verify, type JwtHeader, type SigningKeyCallback, type JwtPayload } from 'jsonwebtoken';
 import { JwksClient } from 'jwks-rsa';
 
-import { type InternalStorageToken, OAuth2Model } from './oauth2-model';
+import { OAuth2Model } from './oauth2-model';
 import { AuthorizationCodeFlow } from './oauth2-authcode';
 import { OAuth2ClientStore } from './oauth2-clients';
 import { oauthTokenToResponse, readRequestBody } from './utils';

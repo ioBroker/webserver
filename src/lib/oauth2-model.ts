@@ -12,32 +12,6 @@ import {
 
 import type { NextFunction, Request, Response } from 'express';
 
-// We must save both tokens, as by logout we must revoke both
-export interface InternalStorageToken {
-    /** Access token */
-    aToken: string;
-    /** According refresh token */
-    rToken: string;
-    /** Expiration time of the access token */
-    aExp: number;
-    /** Expiration time of the refresh token */
-    rExp: number;
-    /** User ID */
-    user: string;
-    /**
-     * ID of the OAuth2 client the token was issued to. Only set for tokens from the authorization
-     * code grant; tokens from the password grant are not tied to a registered client.
-     */
-    clientId?: string;
-    /**
-     * Resource the token is meant for (RFC 8707 `resource`). A resource server must reject tokens
-     * carrying a different audience. Unset means the token is not bound to any single resource.
-     */
-    aud?: string;
-    /** Granted scope, if the client asked for one. */
-    scope?: string;
-}
-
 /** Extra properties bound to a token beyond the user it belongs to. */
 export interface TokenBinding {
     /** ID of the OAuth2 client the token is issued to */
@@ -359,7 +333,7 @@ export class OAuth2Model implements RefreshTokenModel {
             ? Math.floor((token.refreshTokenExpiresAt.getTime() - Date.now()) / 1000)
             : this.refreshTokenLifetime;
 
-        const internalToken: InternalStorageToken = {
+        const internalToken: ioBroker.Session = {
             aToken: token.accessToken,
             aExp: token.accessTokenExpiresAt
                 ? token.accessTokenExpiresAt.getTime()
@@ -450,7 +424,7 @@ export class OAuth2Model implements RefreshTokenModel {
             ) {
                 const accessTokenTtl = Date.now() + 3_600_000;
 
-                const internalToken: InternalStorageToken = {
+                const internalToken: ioBroker.Session = {
                     aToken: Buffer.from(randomBytes(32)).toString('base64'),
                     aExp: accessTokenTtl,
                     rToken: '',
