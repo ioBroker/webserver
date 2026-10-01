@@ -18,7 +18,7 @@ export {
 } from './lib/usedResources';
 export * from './lib/certificateManager';
 export * from './lib/securityChecker';
-export { createOAuth2Server } from './lib/oauth2';
+export { createOAuth2Server, type OidcConfig } from './lib/oauth2';
 export { type TokenBinding, type OAuth2Model } from './lib/oauth2-model';
 export { AuthorizationCodeFlow, type AuthorizationCodeFlowOptions } from './lib/oauth2-authcode';
 export {
