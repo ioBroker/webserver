@@ -297,6 +297,15 @@ export class WebServer<Http2 extends boolean = true> {
         };
         const server = http2.createSecureServer({ ...options, allowHTTP1: true }, app && listener);
 
+        // Node.js 22.21 calls this for every HTTP/1.1 Upgrade request (e.g. WebSocket) but does not set it on the HTTP/2
+        // server, so the first such request crashes the process: https://github.com/nodejs/node/issues/60336
+        const upgradable = server as unknown as { shouldUpgradeCallback?: unknown };
+        if (typeof upgradable.shouldUpgradeCallback !== 'function') {
+            upgradable.shouldUpgradeCallback = function (this: http2.Http2SecureServer): boolean {
+                return this.listenerCount('upgrade') > 0;
+            };
+        }
+
         // close() only stops accepting new connections. A browser keeps its HTTP/2 session open for as long as
         // it likes, and the close callback would never be called - while the session goes on serving the app.
         // An HTTP/1.1 connection is no issue: an idle one is closed by close() itself.
