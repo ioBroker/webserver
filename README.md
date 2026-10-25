@@ -325,6 +325,9 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) `/sso?method=register` Fixed problem with authentication
+
 ### 3.3.1 (2026-10-11)
 - (@GermanBluefox) Added tests for the single sign-on. They run the whole flow against an identity provider that is started inside the test: it publishes a discovery document and its keys, hands out a code and signs the ID token itself. Covered are the login of a connected user, the connecting of an ioBroker user, PKCE for a public client, the secret of a confidential client, the configured scopes, and that the routes do not exist without a configuration, that a foreign redirect target and an unknown state are refused, that a state works only once, and that an identity provider that cannot be reached gives a 502 instead of a dead end. `npm test` builds and runs them
 - (@GermanBluefox) Fixed the crash `server.shouldUpgradeCallback is not a function` on WebSocket connections over HTTP/1.1 with HTTP/2 enabled (Node.js 22.21 bug)

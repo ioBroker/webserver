@@ -43,7 +43,7 @@ All source lives in `src/`, compiled output goes to `build/`. The public API is 
 
 - The library expects an `ioBroker.Adapter` instance passed into constructors; types come from `@iobroker/types`.
 - `express` is a **peer** concern — only `@types/express` is a devDependency, there is no runtime dependency on it. Anything needing request bodies must use `readRequestBody()` from `src/lib/utils.ts`, which falls back to reading the stream when the host adapter installed no body parser.
-- Route order in `createOAuth2Server` matters: discovery/registration/revocation are registered **before** `app.use(model.authorize)` so they stay public, and `/oauth/authorize` **after** it so `req.user` is already resolved from the `access_token` cookie.
+- Route order in `createOAuth2Server` matters: discovery/registration/revocation are registered **before** `app.use(model.authorize)` so they stay public, and `/oauth/authorize` **after** it so `req.user` is already resolved from the `access_token` cookie. `/sso` is in front of it (the login must work without credentials) but runs `model.authorize` as its own route middleware, because `method=register` may only be used by the user themselves or an administrator.
 - TypeScript strict mode is enabled. Target is ES2018, module system is CommonJS.
 - The package has an override for `type-is@2.0.1` due to a conflict with body-parser.
 - Releases use `@alcalzone/release-script` triggered by git tags (v-prefixed semver). The release script runs `npm run build` before committing.

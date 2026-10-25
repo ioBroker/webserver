@@ -326,6 +326,25 @@ class OidcProvider {
 }
 
 /**
+ * Check if a user belongs to the administrators
+ *
+ * @param adapter the adapter instance
+ * @param user the ioBroker user name without the `system.user.` prefix
+ */
+async function isAdministrator(adapter: ioBroker.Adapter, user: string): Promise<boolean> {
+    // js-controller always gives `admin` all rights, whatever the group says
+    if (user === 'admin') {
+        return true;
+    }
+    try {
+        const group = await adapter.getForeignObjectAsync('system.group.administrator');
+        return !!group?.common?.members?.includes(`system.user.${user}`);
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Create an OAuth2 server on the given Express app.
  *
  * @param adapter The adapter instance
@@ -419,16 +438,33 @@ export function createOAuth2Server(
             }
 
             const method = query.method === 'register' ? 'register' : 'login';
-            if (method === 'register' && !query.user) {
-                adapter.log.error('SSO: a register request without a user');
-                res.status(400).send('Missing user');
-                return;
+            const user = query.user?.replace(/^system\.user\./, '');
+            if (method === 'register') {
+                if (!user) {
+                    adapter.log.error('SSO: a register request without a user');
+                    res.status(400).send('Missing user');
+                    return;
+                }
+
+                // Whoever connects an identity can sign in as this user afterwards, so only the user
+                // themselves or an administrator may do it. `req.user` is filled by `model.authorize`.
+                const caller = (req as Request & { user?: string }).user?.replace(/^system\.user\./, '');
+                if (!caller) {
+                    adapter.log.warn(`SSO: refused to connect the user "${user}" without a login`);
+                    res.status(401).send('Unauthorized');
+                    return;
+                }
+                if (caller !== user && !(await isAdministrator(adapter, caller))) {
+                    adapter.log.warn(`SSO: the user "${caller}" may not connect the user "${user}"`);
+                    res.status(403).send('Forbidden');
+                    return;
+                }
             }
 
             const login: PendingLogin = {
                 redirectUrl,
                 method,
-                user: query.user,
+                user,
                 nonce: base64url(randomBytes(16)),
                 // A public client has no secret, it proves with PKCE that the code belongs to it
                 codeVerifier: oidc.isConfidential ? undefined : base64url(randomBytes(32)),
@@ -544,7 +580,9 @@ export function createOAuth2Server(
             res.redirect(redirectUrl.toString());
         };
 
-        options.app.get('/sso', (req: Request, res: Response): void => void handleSsoStart(req, res));
+        // `/sso` stays reachable without a login for `method=login`, but `register` needs to know the
+        // caller, so the credentials are resolved for this route although it is in front of `authorize`
+        options.app.get('/sso', model.authorize, (req: Request, res: Response): void => void handleSsoStart(req, res));
         options.app.get('/sso-callback', (req: Request, res: Response): void => void handleSsoCallback(req, res));
     }
 

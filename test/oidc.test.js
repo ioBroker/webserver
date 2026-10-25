@@ -11,6 +11,15 @@ const CLIENT_ID = 'iobroker-test';
 const CLIENT_SECRET = 'a-confidential-secret';
 const USER_SUB = 'abc-123-sub';
 
+/** Access tokens of signed-in users, as `model.authorize` finds them in the cookie */
+const TOKENS = {
+    admin: 'token-of-admin',
+    bob: 'token-of-bob',
+    eve: 'token-of-eve',
+};
+/** Members of `system.group.administrator` apart from `admin`, who always has all rights */
+const ADMINISTRATORS = ['system.user.bob'];
+
 /**
  * An identity provider that behaves like a real one: it publishes a discovery document and its keys,
  * hands out a code and exchanges that code for an ID token it signs itself.
@@ -151,12 +160,14 @@ function createAdapter(linkedUsers) {
                 value: { common: { externalAuthentication: { oidc: { sub } } } },
             })),
         }),
-        getForeignObjectAsync: async id => ({
-            _id: id,
-            type: 'user',
-            common: { name: id.split('.').pop() },
-            native: {},
-        }),
+        getSession: (id, callback) => {
+            const user = Object.keys(TOKENS).find(name => `a:${TOKENS[name]}` === id);
+            callback(user ? { user, aToken: TOKENS[user], aExp: Date.now() + 3_600_000 } : null);
+        },
+        getForeignObjectAsync: async id =>
+            id === 'system.group.administrator'
+                ? { _id: id, type: 'group', common: { name: 'Administrator', members: ADMINISTRATORS }, native: {} }
+                : { _id: id, type: 'user', common: { name: id.split('.').pop() }, native: {} },
         extendForeignObjectAsync: async (id, obj) => {
             linkedUsers[id] = obj.common.externalAuthentication.oidc.sub;
         },
@@ -242,9 +253,13 @@ describe('single sign-on with OpenID Connect', function () {
          * Walk through a complete login: start it, let the identity provider answer and come back
          *
          * @param query query for `/sso`
+         * @param user signed-in ioBroker user whose cookie is sent to `/sso`, or nobody
          */
-        async function runFlow(query) {
-            const start = await fetch(`${app.base}/sso?${query}`, { redirect: 'manual' });
+        async function runFlow(query, user) {
+            const start = await fetch(`${app.base}/sso?${query}`, {
+                redirect: 'manual',
+                headers: user ? { cookie: `access_token=${TOKENS[user]}` } : {},
+            });
             assert.strictEqual(start.status, 302, `/sso answered with ${start.status}`);
 
             const auth = await fetch(start.headers.get('location'), { redirect: 'manual' });
@@ -255,6 +270,7 @@ describe('single sign-on with OpenID Connect', function () {
 
         beforeEach(async () => {
             linkedUsers = {};
+            idp.lastAuthQuery = null;
             adapter = createAdapter(linkedUsers);
             app = await startApp(adapter, { issuer, clientId: CLIENT_ID });
         });
@@ -266,6 +282,7 @@ describe('single sign-on with OpenID Connect', function () {
         it('connects an existing ioBroker user with the identity', async () => {
             const res = await runFlow(
                 `method=register&user=admin&redirectUrl=${encodeURIComponent(`${app.base}/#tab-users`)}`,
+                'admin',
             );
 
             assert.strictEqual(linkedUsers['system.user.admin'], USER_SUB);
@@ -274,6 +291,52 @@ describe('single sign-on with OpenID Connect', function () {
                 res.headers.get('location').includes('id_token='),
                 `the ID token is handed back: ${res.headers.get('location')}`,
             );
+        });
+
+        it('refuses to connect a user without a login', async () => {
+            const res = await fetch(
+                `${app.base}/sso?method=register&user=admin&redirectUrl=${encodeURIComponent(app.base)}`,
+                { redirect: 'manual' },
+            );
+
+            assert.strictEqual(res.status, 401);
+            assert.strictEqual(idp.lastAuthQuery, null, 'the browser is not sent to the identity provider');
+            assert.deepStrictEqual(linkedUsers, {});
+        });
+
+        it('refuses to connect another user for somebody who is not an administrator', async () => {
+            const res = await fetch(
+                `${app.base}/sso?method=register&user=admin&redirectUrl=${encodeURIComponent(app.base)}`,
+                { redirect: 'manual', headers: { cookie: `access_token=${TOKENS.eve}` } },
+            );
+
+            assert.strictEqual(res.status, 403);
+            assert.deepStrictEqual(linkedUsers, {});
+        });
+
+        it('refuses an access token that is not valid', async () => {
+            const res = await fetch(
+                `${app.base}/sso?method=register&user=admin&redirectUrl=${encodeURIComponent(app.base)}`,
+                { redirect: 'manual', headers: { cookie: 'access_token=made-up' } },
+            );
+
+            assert.strictEqual(res.status, 401);
+            assert.deepStrictEqual(linkedUsers, {});
+        });
+
+        it('lets a user connect themselves', async () => {
+            await runFlow(`method=register&user=eve&redirectUrl=${encodeURIComponent(app.base)}`, 'eve');
+
+            assert.strictEqual(linkedUsers['system.user.eve'], USER_SUB);
+        });
+
+        it('lets a member of the administrators connect another user', async () => {
+            await runFlow(
+                `method=register&user=${encodeURIComponent('system.user.eve')}&redirectUrl=${encodeURIComponent(app.base)}`,
+                'bob',
+            );
+
+            assert.strictEqual(linkedUsers['system.user.eve'], USER_SUB);
         });
 
         it('signs a connected user in', async () => {
