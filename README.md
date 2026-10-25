@@ -325,7 +325,7 @@ grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CL
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.3.2 (2026-10-25)
 - (@GermanBluefox) `/sso?method=register` Fixed problem with authentication
 
 ### 3.3.1 (2026-10-11)
