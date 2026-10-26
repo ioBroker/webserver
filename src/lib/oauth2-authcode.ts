@@ -3,7 +3,7 @@ import type { Express, Request, Response } from 'express';
 
 import type { OAuth2Model } from './oauth2-model';
 import { ClientRegistrationError, type OAuth2ClientStore } from './oauth2-clients';
-import { oauthTokenToResponse, readRequestBody } from './utils';
+import { getBaseUrl, oauthTokenToResponse, readRequestBody } from './utils';
 
 /** How long an authorization code stays valid. Codes are single-use, so this only needs to cover the redirect. */
 const CODE_TTL_SEC = 60;
@@ -257,12 +257,7 @@ export class AuthorizationCodeFlow {
      * @param req The incoming request
      */
     private getBaseUrl(req: Request): string {
-        const configured =
-            typeof this.options.baseUrl === 'function' ? this.options.baseUrl(req) : this.options.baseUrl;
-        if (configured) {
-            return configured.replace(/\/+$/, '');
-        }
-        return `${req.protocol}://${req.get('host') || 'localhost'}`;
+        return getBaseUrl(req, this.options.baseUrl);
     }
 
     // ----- Dynamic client registration (RFC 7591) -----

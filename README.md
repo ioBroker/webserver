@@ -319,12 +319,55 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=authorization_code&code=<CODE>&code_verifier=<VERIFIER>&client_id=<CLIENT_ID>&redirect_uri=<REDIRECT_URI>
 ```
 
+## Single sign-on with OpenID Connect
+
+With the `oidc` option, `createOAuth2Server` adds `/sso` and `/sso-callback` for a login at an
+external identity provider (Keycloak, Authentik, Auth0, Entra ID, ...):
+
+```typescript
+createOAuth2Server(this, {
+    app: this.webServer.app,
+    secure: this.config.secure,
+    oidc: { issuer: 'https://auth.example.com/application/o/iobroker/', clientId: 'iobroker' },
+    // REQUIRED behind a TLS-terminating reverse proxy: the redirect URI sent to the identity provider
+    // is `<baseUrl>/sso-callback` and must match the one registered there
+    baseUrl: 'https://iobroker.example.com',
+    // Recommended: put only a one-time code into the URL instead of the tokens
+    ssoHandoff: 'code',
+});
+```
+
+How the result gets to the page:
+
+- `ssoHandoff: 'url'` (default, for compatibility): after a login the page gets
+  `?ssoLoginResponse=<tokens as JSON>`, after connecting an identity `?id_token=<ID token>`. Both
+  end up in the browser history and in proxy logs.
+- `ssoHandoff: 'code'`: the page gets `?ssoCode=<code>` and exchanges it within 60 seconds, once:
+
+  ```http
+  POST /sso-token HTTP/1.1
+  Content-Type: application/json
+
+  { "code": "<CODE>" }
+  ```
+
+  The answer is the same as for `/oauth/token` after a login, or `{ "id_token": "..." }` after
+  connecting an identity.
+
+In both cases a login also sets the `access_token` cookie (`HttpOnly`, `SameSite=Lax`, `Secure`
+on https).
+
 ## Changelog
 
 <!--
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Fixed: the `access_token` cookie of a single sign-on was set without any flags, so page scripts could read it and it was sent along cross-site requests. It is now `HttpOnly`, `SameSite=Lax` and `Secure` on https
+- (@GermanBluefox) Fixed: behind a TLS-terminating reverse proxy `/sso` sent `http://.../sso-callback` as redirect URI, which did not match the one registered at the identity provider, and refused a `redirectUrl` with `https:`. The `baseUrl` option is now used for the single sign-on too
+- (@GermanBluefox) Added: `ssoHandoff: 'code'` puts only a one-time code into the URL after a single sign-on, the page exchanges it via `POST /sso-token`. Without it the tokens (`?ssoLoginResponse=`) and the ID token (`?id_token=`) are in the URL, as before
+
 ### 3.3.2 (2026-10-25)
 - (@GermanBluefox) `/sso?method=register` Fixed problem with authentication
 

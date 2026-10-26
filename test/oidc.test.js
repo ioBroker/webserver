@@ -179,10 +179,11 @@ function createAdapter(linkedUsers) {
  *
  * @param adapter the adapter the server works with
  * @param oidc the identity provider configuration, or undefined for no single sign-on
+ * @param extraOptions further options for `createOAuth2Server`
  */
-async function startApp(adapter, oidc) {
+async function startApp(adapter, oidc, extraOptions = {}) {
     const app = express();
-    const model = createOAuth2Server(adapter, { app, oidc });
+    const model = createOAuth2Server(adapter, { app, oidc, ...extraOptions });
 
     // Issuing a real token needs the object database, which is not what these tests are about
     model.generateTokens = async userId => ({
@@ -355,6 +356,17 @@ describe('single sign-on with OpenID Connect', function () {
             );
         });
 
+        it('sets the session cookie with the same protection as a password login', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/`)}`);
+            const cookie = res.headers.get('set-cookie') || '';
+
+            assert.match(cookie, /HttpOnly/i, `not readable by scripts: ${cookie}`);
+            assert.match(cookie, /SameSite=Lax/i, `not sent along cross-site requests: ${cookie}`);
+            assert.doesNotMatch(cookie, /Secure/i, `plain http cannot have a secure cookie: ${cookie}`);
+        });
+
         it('signs nobody in for an identity that belongs to no ioBroker user', async () => {
             const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/#tab-intro`)}`);
 
@@ -422,6 +434,144 @@ describe('single sign-on with OpenID Connect', function () {
             });
 
             assert.strictEqual(res.status, 400);
+        });
+    });
+
+    describe('behind a TLS-terminating reverse proxy', () => {
+        const publicBase = 'https://iobroker.example.com';
+
+        it('builds the redirect URI and the cookie from the configured base URL', async () => {
+            const linkedUsers = { 'system.user.admin': USER_SUB };
+            const app = await startApp(
+                createAdapter(linkedUsers),
+                { issuer, clientId: CLIENT_ID },
+                { baseUrl: publicBase },
+            );
+
+            try {
+                // The page sends its own, external address
+                const start = await fetch(
+                    `${app.base}/sso?method=login&redirectUrl=${encodeURIComponent(`${publicBase}/#tab-intro`)}`,
+                    { redirect: 'manual' },
+                );
+                assert.strictEqual(start.status, 302, `/sso answered with ${start.status}`);
+
+                const auth = await fetch(start.headers.get('location'), { redirect: 'manual' });
+                assert.strictEqual(idp.lastAuthQuery.redirect_uri, `${publicBase}/sso-callback`);
+
+                // What the proxy forwards to the adapter
+                const callback = new URL(auth.headers.get('location'));
+                const res = await fetch(`${app.base}${callback.pathname}${callback.search}`, { redirect: 'manual' });
+
+                assert.strictEqual(idp.lastTokenBody.redirect_uri, `${publicBase}/sso-callback`);
+                assert.ok(res.headers.get('location').startsWith(`${publicBase}/`), res.headers.get('location'));
+                assert.match(res.headers.get('set-cookie') || '', /Secure/i, 'the browser sees https');
+            } finally {
+                await app.stop();
+            }
+        });
+
+        it('still refuses a redirect to another host', async () => {
+            const app = await startApp(createAdapter({}), { issuer, clientId: CLIENT_ID }, { baseUrl: publicBase });
+
+            try {
+                const res = await fetch(`${app.base}/sso?method=login&redirectUrl=${encodeURIComponent(app.base)}`, {
+                    redirect: 'manual',
+                });
+                assert.strictEqual(res.status, 400);
+            } finally {
+                await app.stop();
+            }
+        });
+    });
+
+    describe('with the one-time code handoff', () => {
+        let app;
+        let linkedUsers;
+
+        /**
+         * Walk through a complete login, see the other `runFlow`
+         *
+         * @param query query for `/sso`
+         * @param user signed-in ioBroker user whose cookie is sent to `/sso`, or nobody
+         */
+        async function runFlow(query, user) {
+            const start = await fetch(`${app.base}/sso?${query}`, {
+                redirect: 'manual',
+                headers: user ? { cookie: `access_token=${TOKENS[user]}` } : {},
+            });
+            const auth = await fetch(start.headers.get('location'), { redirect: 'manual' });
+            return fetch(auth.headers.get('location'), { redirect: 'manual' });
+        }
+
+        /**
+         * Exchange the one-time code like the page does
+         *
+         * @param code the code out of the redirect
+         */
+        function exchange(code) {
+            return fetch(`${app.base}/sso-token`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ code }),
+            });
+        }
+
+        beforeEach(async () => {
+            linkedUsers = {};
+            app = await startApp(createAdapter(linkedUsers), { issuer, clientId: CLIENT_ID }, { ssoHandoff: 'code' });
+        });
+
+        afterEach(async () => {
+            await app.stop();
+        });
+
+        it('puts no token into the URL after a login', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/#tab-intro`)}`);
+            const location = new URL(res.headers.get('location'));
+
+            assert.ok(!location.searchParams.has('ssoLoginResponse'), location.href);
+            assert.ok(!location.href.includes('access-for-'), location.href);
+            assert.strictEqual(location.hash, '#tab-intro');
+
+            const answer = await exchange(location.searchParams.get('ssoCode'));
+            assert.strictEqual(answer.status, 200);
+            assert.strictEqual(answer.headers.get('cache-control'), 'no-store');
+            const tokens = await answer.json();
+            assert.strictEqual(tokens.access_token, 'access-for-system.user.admin');
+            assert.strictEqual(tokens.refresh_token, 'refresh');
+        });
+
+        it('accepts a code only once', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/`)}`);
+            const code = new URL(res.headers.get('location')).searchParams.get('ssoCode');
+
+            assert.strictEqual((await exchange(code)).status, 200);
+            assert.strictEqual((await exchange(code)).status, 400);
+        });
+
+        it('refuses a code it did not hand out', async () => {
+            assert.strictEqual((await exchange('made-up')).status, 400);
+            assert.strictEqual((await exchange('')).status, 400);
+        });
+
+        it('hands out the ID token of a connected identity through the code', async () => {
+            const res = await runFlow(
+                `method=register&user=admin&redirectUrl=${encodeURIComponent(app.base)}`,
+                'admin',
+            );
+            const location = new URL(res.headers.get('location'));
+
+            assert.strictEqual(linkedUsers['system.user.admin'], USER_SUB);
+            assert.ok(!location.searchParams.has('id_token'), location.href);
+
+            const answer = await exchange(location.searchParams.get('ssoCode'));
+            const { id_token } = await answer.json();
+            assert.strictEqual(jwt.decode(id_token).sub, USER_SUB);
         });
     });
 

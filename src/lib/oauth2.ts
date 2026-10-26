@@ -8,7 +8,7 @@ import { JwksClient } from 'jwks-rsa';
 import { OAuth2Model } from './oauth2-model';
 import { AuthorizationCodeFlow } from './oauth2-authcode';
 import { OAuth2ClientStore } from './oauth2-clients';
-import { oauthTokenToResponse, readRequestBody } from './utils';
+import { getBaseUrl, oauthTokenToResponse, readRequestBody, type IobrokerOauthResponse } from './utils';
 
 export interface CookieOptions {
     /** Convenient option for setting the expiry time relative to the current time in **milliseconds**. */
@@ -112,6 +112,12 @@ interface PendingLogin {
 /** A login that is not finished within this time is forgotten */
 const PENDING_LOGIN_TTL_MS = 10 * 60 * 1000;
 
+/** What the browser fetches with the one-time code of `ssoHandoff: 'code'` */
+type SsoHandoff = IobrokerOauthResponse | { id_token: string };
+
+/** The page the browser comes back to has to fetch the result within this time */
+const HANDOFF_TTL_MS = 60 * 1000;
+
 /**
  * Encode as base64url, the form the OAuth2 and OIDC specifications ask for
  *
@@ -139,6 +145,9 @@ class OidcProvider {
 
     /** Logins that were started, by the opaque state that the identity provider gets */
     private readonly pending = new Map<string, PendingLogin>();
+
+    /** Finished logins that wait for the browser to fetch them, by their one-time code */
+    private readonly handoffs = new Map<string, { result: SsoHandoff; expires: number }>();
 
     constructor(adapter: ioBroker.Adapter, config: OidcConfig) {
         this.adapter = adapter;
@@ -214,6 +223,37 @@ class OidcProvider {
         this.pending.delete(state);
 
         return entry && entry.expires > Date.now() ? entry : undefined;
+    }
+
+    /**
+     * Keep the result of a finished login and give back a one-time code for it. Only the code
+     * travels in the URL, so the tokens end up neither in the browser history nor in proxy logs.
+     *
+     * @param result tokens of a login, or the ID token of a connected identity
+     */
+    createHandoff(result: SsoHandoff): string {
+        const now = Date.now();
+        for (const [key, entry] of this.handoffs) {
+            if (entry.expires <= now) {
+                this.handoffs.delete(key);
+            }
+        }
+
+        const code = base64url(randomBytes(24));
+        this.handoffs.set(code, { result, expires: now + HANDOFF_TTL_MS });
+        return code;
+    }
+
+    /**
+     * Take the result of a finished login out of the list. Every code works exactly once.
+     *
+     * @param code the code the browser got with the redirect
+     */
+    takeHandoff(code: string): SsoHandoff | undefined {
+        const entry = this.handoffs.get(code);
+        this.handoffs.delete(code);
+
+        return entry && entry.expires > Date.now() ? entry.result : undefined;
     }
 
     /**
@@ -356,11 +396,13 @@ async function isAdministrator(adapter: ioBroker.Adapter, user: string): Promise
  * @param options.noBasicAuth Do not allow basic authentication
  * @param options.loginPage The login page URL (default: empty and someone else will handle the login). It could be a function too
  * @param options.authorizationCode Enable the browser-based authorization code flow with PKCE (default: disabled)
- * @param options.baseUrl Externally reachable base URL, required behind a reverse proxy
+ * @param options.baseUrl Externally reachable base URL, required behind a reverse proxy. Used for the authorization code flow and the single sign-on.
  * @param options.dynamicClientRegistration Let clients register themselves via RFC 7591 (default: enabled with the authorization code flow)
  * @param options.maxClients Maximum number of registered clients before the oldest dynamic ones are pruned
  * @param options.productName Name shown on the login and consent pages (default: "ioBroker")
  * @param options.oidc Identity provider for the single sign-on. Without it, `/sso` does not exist.
+ * @param options.ssoHandoff How the result of the single sign-on gets to the page: `url` (default) puts the tokens into the URL
+ *   (`?ssoLoginResponse=` or `?id_token=`), `code` puts only a one-time `?ssoCode=` there, which the page exchanges via `POST /sso-token`
  */
 export function createOAuth2Server(
     adapter: ioBroker.Adapter,
@@ -377,6 +419,7 @@ export function createOAuth2Server(
         maxClients?: number;
         productName?: string;
         oidc?: OidcConfig;
+        ssoHandoff?: 'url' | 'code';
     },
 ): OAuth2Model {
     const model = new OAuth2Model(adapter, {
@@ -420,14 +463,16 @@ export function createOAuth2Server(
          */
         const handleSsoStart = async (req: Request, res: Response): Promise<void> => {
             const query = req.query as { redirectUrl?: string; method?: string; user?: string };
-            const ownOrigin = `${req.protocol}://${req.get('host')}`;
+            // Behind a TLS-terminating proxy `req.protocol` is `http`, which matches neither the
+            // redirect URI registered at the identity provider nor the `redirectUrl` of the page
+            const baseUrl = getBaseUrl(req, options.baseUrl);
 
             // The browser is sent to this address after the login, so it has to stay on this server.
             // Without the check, the route would be an open redirect for anybody who can call it.
             let redirectUrl: string;
             try {
-                const target = new URL(query.redirectUrl || '/', ownOrigin);
-                if (target.origin !== new URL(ownOrigin).origin) {
+                const target = new URL(query.redirectUrl || `${baseUrl}/`, `${baseUrl}/`);
+                if (target.origin !== new URL(baseUrl).origin) {
                     throw new Error('foreign origin');
                 }
                 redirectUrl = target.href;
@@ -468,7 +513,7 @@ export function createOAuth2Server(
                 nonce: base64url(randomBytes(16)),
                 // A public client has no secret, it proves with PKCE that the code belongs to it
                 codeVerifier: oidc.isConfidential ? undefined : base64url(randomBytes(32)),
-                redirectUri: `${ownOrigin}/sso-callback`,
+                redirectUri: `${baseUrl}/sso-callback`,
                 expires: 0,
             };
 
@@ -543,11 +588,20 @@ export function createOAuth2Server(
                     const responseToken = oauthTokenToResponse(oauthToken);
 
                     const redirectUrl = new URL(login.redirectUrl);
-                    redirectUrl.search = new URLSearchParams({
-                        ssoLoginResponse: JSON.stringify(responseToken),
-                    }).toString();
+                    redirectUrl.search = new URLSearchParams(
+                        options.ssoHandoff === 'code'
+                            ? { ssoCode: oidc.createHandoff(responseToken) }
+                            : { ssoLoginResponse: JSON.stringify(responseToken) },
+                    ).toString();
 
-                    res.cookie('access_token', responseToken.access_token).redirect(redirectUrl.toString());
+                    // The same flags as for a password login, apart from `sameSite`: the browser comes
+                    // back from the identity provider, and a `strict` cookie would not be sent along
+                    // this redirect chain, so the page would load as if nobody had signed in
+                    res.cookie('access_token', responseToken.access_token, {
+                        httpOnly: true,
+                        secure: options.secure || login.redirectUri.startsWith('https:'),
+                        sameSite: 'lax',
+                    }).redirect(redirectUrl.toString());
                     return;
                 } catch (e) {
                     adapter.log.error(`Could not get oauth token: ${(e as Error).message}`);
@@ -576,14 +630,46 @@ export function createOAuth2Server(
             await adapter.extendForeignObjectAsync(`system.user.${login.user}`, userObj);
 
             const redirectUrl = new URL(login.redirectUrl);
-            redirectUrl.search = `id_token=${tokenData.id_token}`;
+            redirectUrl.search = new URLSearchParams(
+                options.ssoHandoff === 'code'
+                    ? { ssoCode: oidc.createHandoff({ id_token: tokenData.id_token }) }
+                    : { id_token: tokenData.id_token },
+            ).toString();
             res.redirect(redirectUrl.toString());
+        };
+
+        /**
+         * Hand the result of a finished login to the page, in exchange for the one-time code it got
+         * with the redirect. Needs no login: the code itself is the proof.
+         *
+         * @param req request with the `code` in the body
+         * @param res response with the tokens, or the ID token of a connected identity
+         */
+        const handleSsoToken = async (req: Request, res: Response): Promise<void> => {
+            let code: unknown;
+            try {
+                code = (await readRequestBody(req)).code;
+            } catch (e) {
+                res.status(400).json({ error: 'invalid_request', error_description: (e as Error).message });
+                return;
+            }
+
+            const result = typeof code === 'string' && code ? oidc.takeHandoff(code) : undefined;
+            if (!result) {
+                res.status(400).json({ error: 'invalid_grant', error_description: 'Unknown or expired code' });
+                return;
+            }
+
+            res.set('Cache-Control', 'no-store').json(result);
         };
 
         // `/sso` stays reachable without a login for `method=login`, but `register` needs to know the
         // caller, so the credentials are resolved for this route although it is in front of `authorize`
         options.app.get('/sso', model.authorize, (req: Request, res: Response): void => void handleSsoStart(req, res));
         options.app.get('/sso-callback', (req: Request, res: Response): void => void handleSsoCallback(req, res));
+        if (options.ssoHandoff === 'code') {
+            options.app.post('/sso-token', (req: Request, res: Response): void => void handleSsoToken(req, res));
+        }
     }
 
     // Post token.

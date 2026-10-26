@@ -4,7 +4,7 @@ import type { Request } from 'express';
 /** Upper bound for a request body we parse ourselves. */
 const MAX_BODY_SIZE = 64 * 1024;
 
-interface IobrokerOauthResponse {
+export interface IobrokerOauthResponse {
     access_token: string;
     token_type: string;
     expires_in: number;
@@ -29,6 +29,22 @@ export function oauthTokenToResponse(token: OAuth2Server.Token): IobrokerOauthRe
             ? Math.floor((token.refreshTokenExpiresAt.getTime() - Date.now()) / 1000)
             : 0,
     };
+}
+
+/**
+ * Determine the externally reachable base URL, without a trailing slash. Behind a reverse proxy the
+ * request-derived value is wrong (`http:` instead of `https:`, internal host) unless the host app
+ * enabled `trust proxy`, which is why it can be configured.
+ *
+ * @param req The incoming request
+ * @param baseUrl The configured base URL, or a function that derives it from the request
+ */
+export function getBaseUrl(req: Request, baseUrl?: string | ((req: Request) => string)): string {
+    const configured = typeof baseUrl === 'function' ? baseUrl(req) : baseUrl;
+    if (configured) {
+        return configured.replace(/\/+$/, '');
+    }
+    return `${req.protocol}://${req.get('host') || 'localhost'}`;
 }
 
 /**
