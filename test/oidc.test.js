@@ -184,16 +184,20 @@ function createAdapter(linkedUsers) {
 async function startApp(adapter, oidc, extraOptions = {}) {
     const app = express();
     const model = createOAuth2Server(adapter, { app, oidc, ...extraOptions });
+    const generatedTokenUsers = [];
 
     // Issuing a real token needs the object database, which is not what these tests are about
-    model.generateTokens = async userId => ({
-        accessToken: `access-for-${userId}`,
-        refreshToken: 'refresh',
-        accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
-        refreshTokenExpiresAt: new Date(Date.now() + 7_200_000),
-        client: { id: 'ioBroker' },
-        user: { id: userId },
-    });
+    model.generateTokens = async userId => {
+        generatedTokenUsers.push(userId);
+        return {
+            accessToken: `access-for-${userId}`,
+            refreshToken: 'refresh',
+            accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
+            refreshTokenExpiresAt: new Date(Date.now() + 7_200_000),
+            client: { id: 'ioBroker' },
+            user: { id: userId },
+        };
+    };
 
     const server = await new Promise(resolve => {
         const s = app.listen(0, '127.0.0.1', () => resolve(s));
@@ -201,6 +205,7 @@ async function startApp(adapter, oidc, extraOptions = {}) {
 
     return {
         base: `http://127.0.0.1:${server.address().port}`,
+        generatedTokenUsers,
         stop: () => new Promise(resolve => server.close(resolve)),
     };
 }
@@ -267,6 +272,11 @@ describe('single sign-on with OpenID Connect', function () {
             assert.strictEqual(auth.status, 302, `the identity provider answered with ${auth.status}`);
 
             return fetch(auth.headers.get('location'), { redirect: 'manual' });
+        }
+
+        async function restartApp(extraOptions) {
+            await app.stop();
+            app = await startApp(adapter, { issuer, clientId: CLIENT_ID }, extraOptions);
         }
 
         beforeEach(async () => {
@@ -353,6 +363,56 @@ describe('single sign-on with OpenID Connect', function () {
             assert.ok(
                 (res.headers.get('set-cookie') || '').includes('access_token=access-for-system.user.admin'),
                 `the cookie is set: ${res.headers.get('set-cookie')}`,
+            );
+            assert.deepStrictEqual(app.generatedTokenUsers, ['system.user.admin']);
+        });
+
+        it('maps the linked user before issuing SSO tokens', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+            await restartApp({
+                resolveSsoUser: async userName => (userName === 'system.user.admin' ? 'mapped' : undefined),
+            });
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/`)}`);
+
+            assert.ok(
+                (res.headers.get('set-cookie') || '').includes('access_token=access-for-mapped'),
+                `the mapped user receives the token: ${res.headers.get('set-cookie')}`,
+            );
+            assert.deepStrictEqual(app.generatedTokenUsers, ['mapped']);
+        });
+
+        it('refuses a linked user before issuing SSO tokens', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+            await restartApp({ resolveSsoUser: () => undefined });
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/`)}`);
+
+            assert.ok(!(res.headers.get('location') || '').includes('ssoLoginResponse'));
+            assert.strictEqual(res.headers.get('set-cookie'), null, 'the refused login gets no access-token cookie');
+            assert.deepStrictEqual(app.generatedTokenUsers, [], 'refusal happens before token generation');
+            assert.ok(
+                adapter.logged.some(
+                    ([level, message]) => level === 'warn' && message.includes('refused by the SSO user resolver'),
+                ),
+                `the refusal is logged: ${JSON.stringify(adapter.logged)}`,
+            );
+        });
+
+        it('refuses the login and issues no tokens when the user resolver throws', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+            await restartApp({ resolveSsoUser: () => Promise.reject(new Error('resolver failed')) });
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/`)}`);
+
+            assert.ok(!(res.headers.get('location') || '').includes('ssoLoginResponse'));
+            assert.strictEqual(res.headers.get('set-cookie'), null, 'the failed login gets no access-token cookie');
+            assert.deepStrictEqual(app.generatedTokenUsers, [], 'a resolver error happens before token generation');
+            assert.ok(
+                adapter.logged.some(
+                    ([level, message]) => level === 'error' && message.includes('cannot resolve user'),
+                ),
+                `the resolver error is logged: ${JSON.stringify(adapter.logged)}`,
             );
         });
 

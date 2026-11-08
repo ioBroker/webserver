@@ -403,6 +403,8 @@ async function isAdministrator(adapter: ioBroker.Adapter, user: string): Promise
  * @param options.oidc Identity provider for the single sign-on. Without it, `/sso` does not exist.
  * @param options.ssoHandoff How the result of the single sign-on gets to the page: `url` (default) puts the tokens into the URL
  *   (`?ssoLoginResponse=` or `?id_token=`), `code` puts only a one-time `?ssoCode=` there, which the page exchanges via `POST /sso-token`
+ * @param options.resolveSsoUser Resolve the linked ioBroker user before issuing tokens. Receives the full user ID
+ *   (for example, `system.user.admin`) and returns the identifier to pass to the token model, or `undefined` to refuse.
  */
 export function createOAuth2Server(
     adapter: ioBroker.Adapter,
@@ -420,6 +422,7 @@ export function createOAuth2Server(
         productName?: string;
         oidc?: OidcConfig;
         ssoHandoff?: 'url' | 'code';
+        resolveSsoUser?: (userName: string) => string | undefined | Promise<string | undefined>;
     },
 ): OAuth2Model {
     const model = new OAuth2Model(adapter, {
@@ -583,8 +586,24 @@ export function createOAuth2Server(
                     return;
                 }
 
+                const userName = item.id;
+                let tokenUserName: string | undefined;
                 try {
-                    const oauthToken = await model.generateTokens(item.id);
+                    tokenUserName = options.resolveSsoUser ? await options.resolveSsoUser(userName) : userName;
+                } catch (e) {
+                    adapter.log.error(`SSO: cannot resolve user "${userName}": ${(e as Error).message}`);
+                    res.redirect(login.redirectUrl);
+                    return;
+                }
+
+                if (!tokenUserName) {
+                    adapter.log.warn(`SSO: user "${userName}" was refused by the SSO user resolver`);
+                    res.redirect(login.redirectUrl);
+                    return;
+                }
+
+                try {
+                    const oauthToken = await model.generateTokens(tokenUserName);
                     const responseToken = oauthTokenToResponse(oauthToken);
 
                     const redirectUrl = new URL(login.redirectUrl);
