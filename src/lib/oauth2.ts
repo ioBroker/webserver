@@ -403,8 +403,9 @@ async function isAdministrator(adapter: ioBroker.Adapter, user: string): Promise
  * @param options.oidc Identity provider for the single sign-on. Without it, `/sso` does not exist.
  * @param options.ssoHandoff How the result of the single sign-on gets to the page: `url` (default) puts the tokens into the URL
  *   (`?ssoLoginResponse=` or `?id_token=`), `code` puts only a one-time `?ssoCode=` there, which the page exchanges via `POST /sso-token`
- * @param options.resolveSsoUser Resolve the linked ioBroker user before issuing tokens. Receives the full user ID
- *   (for example, `system.user.admin`) and returns the identifier to pass to the token model, or `undefined` to refuse.
+ * @param options.resolveSsoUser Map or refuse the linked ioBroker user before tokens are issued. Receives the full
+ *   user ID (for example, `system.user.admin`) and returns the value passed to `generateTokens()` as it is (the short
+ *   name, as for a password login), or `undefined` to refuse. Without it, the full user ID is passed.
  */
 export function createOAuth2Server(
     adapter: ioBroker.Adapter,

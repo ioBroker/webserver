@@ -357,12 +357,37 @@ How the result gets to the page:
 In both cases a login also sets the `access_token` cookie (`HttpOnly`, `SameSite=Lax`, `Secure`
 on https).
 
+### Mapping or refusing the user (`resolveSsoUser`)
+
+By default every ioBroker user that is linked with the identity (`common.externalAuthentication.oidc.sub`) gets
+tokens. With `resolveSsoUser` the adapter decides before the tokens are created, e.g. to apply its own user list:
+
+```typescript
+createOAuth2Server(this, {
+    app: this.webServer.app,
+    oidc: { issuer: 'https://auth.example.com/application/o/iobroker/', clientId: 'iobroker' },
+    ssoHandoff: 'code',
+    // Receives the full ID of the linked user, e.g. `system.user.admin`.
+    // Return the user the tokens are issued for, or `undefined` to refuse the login.
+    resolveSsoUser: userId => (isAllowed(userId) ? userId.replace(/^system\.user\./, '') : undefined),
+});
+```
+
+The returned value is passed to `OAuth2Model.generateTokens()` as it is, so return the same form as for a password
+login (the short name, without `system.user.`). Without `resolveSsoUser` the full ID of the linked user is passed.
+A refused login (or a resolver that throws) ends like an unlinked identity: no tokens, no `access_token` cookie, the
+browser is sent back to `redirectUrl` and the reason is logged. The resolver is only called for `method=login`, not
+when an identity is connected.
+
 ## Changelog
 
 <!--
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@matthiasnissen) Added: the option `resolveSsoUser` of `createOAuth2Server` maps or refuses the linked user before the tokens of a single sign-on are created
+
 ### 3.4.0 (2026-10-26)
 - (@GermanBluefox) Fixed: the `access_token` cookie of a single sign-on was set without any flags, so page scripts could read it and it was sent along cross-site requests. It is now `HttpOnly`, `SameSite=Lax` and `Secure` on https
 - (@GermanBluefox) Fixed: behind a TLS-terminating reverse proxy `/sso` sent `http://.../sso-callback` as redirect URI, which did not match the one registered at the identity provider, and refused a `redirectUrl` with `https:`. The `baseUrl` option is now used for the single sign-on too
