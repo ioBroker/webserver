@@ -29,6 +29,8 @@ interface PendingAuthRequest {
     resource?: string;
     /** Set once the request is tied to an authenticated ioBroker user. */
     user?: string;
+    /** The password of this user was right, the code of the second factor is still missing */
+    otpUser?: string;
 }
 
 /** An issued authorization code, redeemable exactly once at the token endpoint. */
@@ -442,15 +444,40 @@ export class AuthorizationCodeFlow {
         if (action === 'login') {
             const username = typeof body.username === 'string' ? body.username : '';
             const password = typeof body.password === 'string' ? body.password : '';
-            const user = await this.model.getUser(username, password);
-            if (!user) {
+            // An empty code: a user with two-factor authentication is asked for it in a second step
+            const result = await this.model.checkLogin(username, password, '');
+            if ('error' in result) {
+                if (result.error === 'otp_required' && result.user) {
+                    pending.otpUser = result.user;
+                    await this.setSession(`${REQUEST_PREFIX}${requestId}`, REQUEST_TTL_SEC, pending);
+                    this.sendAuthorizePage(res, requestId, pending);
+                    return;
+                }
                 // Keep the pending request alive so the user can retry without restarting the flow.
                 this.sendAuthorizePage(res, requestId, pending, 'Wrong user name or password.');
                 return;
             }
-            pending.user = user.id as string;
+            pending.user = result.user;
+            delete pending.otpUser;
             await this.setSession(`${REQUEST_PREFIX}${requestId}`, REQUEST_TTL_SEC, pending);
             // Logging in is not consenting — show the consent step now that we know who is asking.
+            this.sendAuthorizePage(res, requestId, pending);
+            return;
+        }
+
+        if (action === 'otp') {
+            if (!pending.otpUser) {
+                this.sendAuthorizePage(res, requestId, pending, 'Please log in first.');
+                return;
+            }
+            const code = typeof body.otp === 'string' ? body.otp : '';
+            if (!(await this.model.verifySecondFactor(pending.otpUser, code))) {
+                this.sendAuthorizePage(res, requestId, pending, 'Wrong code.');
+                return;
+            }
+            pending.user = pending.otpUser;
+            delete pending.otpUser;
+            await this.setSession(`${REQUEST_PREFIX}${requestId}`, REQUEST_TTL_SEC, pending);
             this.sendAuthorizePage(res, requestId, pending);
             return;
         }
@@ -696,7 +723,20 @@ export class AuthorizationCodeFlow {
                 <button type="submit" name="action" value="allow" class="primary">Allow</button>
             </div>
         </form>`
-            : `<h1>Sign in</h1>
+            : pending.otpUser
+              ? `<h1>Two-factor authentication</h1>
+        <p>Enter the code from the authenticator app of <strong>${escapeHtml(pending.otpUser)}</strong>, or one of the backup codes.</p>
+        ${errorBlock}
+        <form method="post" action="authorize">
+            <input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
+            <label for="otp">Code</label>
+            <input type="text" id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric" autofocus required>
+            <div class="buttons">
+                <button type="submit" name="action" value="deny" class="secondary" formnovalidate>Cancel</button>
+                <button type="submit" name="action" value="otp" class="primary">Confirm</button>
+            </div>
+        </form>`
+              : `<h1>Sign in</h1>
         <p><strong>${clientName}</strong> is asking for access to your ${escapeHtml(this.productName)} installation.</p>
         ${errorBlock}
         <form method="post" action="authorize">

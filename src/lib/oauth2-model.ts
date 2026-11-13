@@ -12,6 +12,8 @@ import {
 
 import type { NextFunction, Request, Response } from 'express';
 
+import { SecondFactor, shortUserName } from './totp';
+
 /** Extra properties bound to a token beyond the user it belongs to. */
 export interface TokenBinding {
     /** ID of the OAuth2 client the token is issued to */
@@ -31,6 +33,10 @@ export class OAuth2Model implements RefreshTokenModel {
     private readonly noBasicAuth: boolean; // Do not allow basic auth
     private adapter: ioBroker.Adapter;
     private bruteForce: Record<string, { errors: number; time: number }> = {};
+    /** One-time keys for `getUser` of logins whose password and code were checked already */
+    private readonly preAuthorized = new Map<string, { user: string; expires: number }>();
+    /** Two-factor authentication with an authenticator app */
+    readonly secondFactor: SecondFactor;
 
     /**
      * Create an OAuth2model
@@ -53,6 +59,7 @@ export class OAuth2Model implements RefreshTokenModel {
         this.accessTokenLifetime = options?.accessLifetime || this.accessTokenLifetime;
         this.refreshTokenLifetime = options?.refreshLifeTime || this.refreshTokenLifetime;
         this.noBasicAuth = options?.noBasicAuth || false;
+        this.secondFactor = new SecondFactor(adapter);
     }
 
     getAccessToken = async (bearerToken: string): Promise<Token | Falsey> => {
@@ -253,42 +260,51 @@ export class OAuth2Model implements RefreshTokenModel {
     };
 
     /**
-     * Get user.
+     * Minutes the user still has to wait after too many wrong attempts, or 0
+     *
+     * @param key user name as returned by `shortUserName`
      */
-    getUser = async (username: string, password: string): Promise<User | Falsey> => {
-        const now = Date.now();
-        if (this.bruteForce[username]?.errors > 4) {
-            let minutes = now - this.bruteForce[username].time;
-            if (this.bruteForce[username].errors < 7) {
-                if (now - this.bruteForce[username].time < 60_000) {
-                    minutes = 1;
-                } else {
-                    minutes = 0;
-                }
-            } else if (this.bruteForce[username].errors < 10) {
-                if (now - this.bruteForce[username].time < 180_000) {
-                    minutes = Math.ceil((180_000 - minutes) / 60000);
-                } else {
-                    minutes = 0;
-                }
-            } else if (this.bruteForce[username].errors < 15) {
-                if (now - this.bruteForce[username].time < 600_000) {
-                    minutes = Math.ceil((600_000 - minutes) / 60_000);
-                } else {
-                    minutes = 0;
-                }
-            } else if (now - this.bruteForce[username].time < 3_600_000) {
-                minutes = Math.ceil((3_600_000 - minutes) / 60_000);
-            } else {
-                minutes = 0;
-            }
+    private getBlockedMinutes(key: string): number {
+        const entry = this.bruteForce[key];
+        if (!entry || entry.errors <= 4) {
+            return 0;
+        }
+        const passed = Date.now() - entry.time;
+        // 5-6 errors: 1 minute, 7-9: 3 minutes, 10-14: 10 minutes, then 1 hour
+        const wait = entry.errors < 7 ? 60_000 : entry.errors < 10 ? 180_000 : entry.errors < 15 ? 600_000 : 3_600_000;
+        return passed < wait ? Math.max(1, Math.ceil((wait - passed) / 60_000)) : 0;
+    }
 
-            if (minutes) {
-                this.adapter.log.warn(
-                    `Too many errors for "${username}". Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`,
-                );
-                return null;
-            }
+    private countFailure(key: string): number {
+        this.bruteForce[key] ||= { errors: 0, time: 0 };
+        this.bruteForce[key].time = Date.now();
+        this.bruteForce[key].errors++;
+        return this.bruteForce[key].errors;
+    }
+
+    /**
+     * Check a login with the password and, if the user has switched it on, the code of the second factor.
+     * A wrong password and a wrong code both count for the brute force protection; the counter is only
+     * reset after the whole login succeeded, so a known password does not allow guessing codes endlessly.
+     *
+     * @param username the user name as typed
+     * @param password the password
+     * @param otp code from the authenticator app or a backup code. `undefined` means that the client cannot
+     *   send a code at all (basic authentication, password in the URL): a user with two-factor authentication
+     *   cannot log in that way. An empty code means: ask for it.
+     */
+    checkLogin = async (
+        username: string,
+        password: string,
+        otp?: string | null,
+    ): Promise<{ user: string } | { error: 'invalid' | 'otp_required' | 'otp_invalid'; user?: string }> => {
+        const key = shortUserName(username);
+        const minutes = this.getBlockedMinutes(key);
+        if (minutes) {
+            this.adapter.log.warn(
+                `Too many errors for "${username}". Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`,
+            );
+            return { error: 'invalid' };
         }
 
         const result = await new Promise<{ success: boolean; user: string }>(resolve =>
@@ -297,20 +313,93 @@ export class OAuth2Model implements RefreshTokenModel {
             ),
         );
         if (!result.success) {
-            this.bruteForce[username] = this.bruteForce[username] || { errors: 0 };
-            this.bruteForce[username].time = new Date().getTime();
-            this.bruteForce[username].errors++;
+            const errors = this.countFailure(key);
+            this.adapter.log.warn(`Invalid password for ${username}. Wrong attempts: ${errors}`);
+            return { error: 'invalid' };
+        }
+        const user = shortUserName(result.user || username);
+
+        if (await this.secondFactor.isEnabled(user)) {
+            if (otp === undefined) {
+                this.adapter.log.warn(
+                    `The user "${user}" uses two-factor authentication and cannot log in with the password alone (basic authentication or password in the URL)`,
+                );
+                return { error: 'invalid' };
+            }
+            if (!otp) {
+                // The password was right, so this is no failed attempt: the client asks for the code now
+                return { error: 'otp_required', user };
+            }
+            if (!(await this.secondFactor.verify(user, otp))) {
+                const errors = this.countFailure(key);
+                this.adapter.log.warn(`Invalid two-factor code for ${username}. Wrong attempts: ${errors}`);
+                return { error: 'otp_invalid' };
+            }
+        }
+
+        delete this.bruteForce[key];
+        return { user };
+    };
+
+    /**
+     * Check only the second factor, for logins that checked the password in an earlier step
+     * (the login page of the authorization code flow, the login form of web). Wrong codes count for the
+     * brute force protection like wrong passwords.
+     *
+     * @param user the user whose password was checked already
+     * @param otp code from the authenticator app or a backup code
+     */
+    verifySecondFactor = async (user: string, otp: string): Promise<boolean> => {
+        const key = shortUserName(user);
+        const minutes = this.getBlockedMinutes(key);
+        if (minutes) {
             this.adapter.log.warn(
-                `Invalid password for ${username}. Wrong attempts: ${this.bruteForce[username].errors}`,
+                `Too many errors for "${user}". Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`,
             );
-            return null;
+            return false;
         }
-        if (this.bruteForce[username]) {
-            delete this.bruteForce[username];
+        if (!(await this.secondFactor.verify(key, otp || ''))) {
+            const errors = this.countFailure(key);
+            this.adapter.log.warn(`Invalid two-factor code for ${user}. Wrong attempts: ${errors}`);
+            return false;
         }
-        return {
-            id: result.user.replace(/^system\.user\./, ''),
-        };
+        delete this.bruteForce[key];
+        return true;
+    };
+
+    /**
+     * A one-time key that `getUser` accepts instead of the password of this user. The token endpoint checks
+     * the password and the code itself and hands over with this key to `oauth2-server`, which only knows
+     * user name and password.
+     *
+     * @param user the user that is logged in
+     */
+    preAuthorize(user: string): string {
+        const now = Date.now();
+        for (const [key, entry] of this.preAuthorized) {
+            if (entry.expires < now) {
+                this.preAuthorized.delete(key);
+            }
+        }
+        const key = randomBytes(32).toString('hex');
+        this.preAuthorized.set(key, { user: shortUserName(user), expires: now + 30_000 });
+        return key;
+    }
+
+    /**
+     * Get user. Called by `oauth2-server` for the password grant and by `authorize` for basic authentication
+     * and a password in the URL. Only the token endpoint can ask for a code, so a user with two-factor
+     * authentication gets in here only with a key from `preAuthorize`.
+     */
+    getUser = async (username: string, password: string): Promise<User | Falsey> => {
+        const pre = typeof password === 'string' ? this.preAuthorized.get(password) : undefined;
+        if (pre) {
+            this.preAuthorized.delete(password);
+            return pre.expires >= Date.now() && pre.user === shortUserName(username) ? { id: pre.user } : null;
+        }
+
+        const result = await this.checkLogin(username, password);
+        return 'user' in result ? { id: result.user } : null;
     };
 
     /**
