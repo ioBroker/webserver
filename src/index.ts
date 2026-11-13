@@ -20,6 +20,17 @@ export * from './lib/certificateManager';
 export * from './lib/securityChecker';
 export { createOAuth2Server, type OidcConfig } from './lib/oauth2';
 export { type TokenBinding, type OAuth2Model } from './lib/oauth2-model';
+export {
+    SecondFactor,
+    base32Decode,
+    base32Encode,
+    findTotpStep,
+    generateTotpSecret,
+    hotp,
+    totpStep,
+    totpUri,
+    type StoredTotp,
+} from './lib/totp';
 export { AuthorizationCodeFlow, type AuthorizationCodeFlowOptions } from './lib/oauth2-authcode';
 export {
     OAuth2ClientStore,

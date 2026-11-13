@@ -9,6 +9,7 @@ import { OAuth2Model } from './oauth2-model';
 import { AuthorizationCodeFlow } from './oauth2-authcode';
 import { OAuth2ClientStore } from './oauth2-clients';
 import { getBaseUrl, oauthTokenToResponse, readRequestBody, type IobrokerOauthResponse } from './utils';
+import { shortUserName } from './totp';
 
 export interface CookieOptions {
     /** Convenient option for setting the expiry time relative to the current time in **milliseconds**. */
@@ -385,6 +386,142 @@ async function isAdministrator(adapter: ioBroker.Adapter, user: string): Promise
 }
 
 /**
+ * Answer a failed password login. A wrong password gets the same answer as from `oauth2-server`, so that
+ * existing clients see no difference; a missing or wrong code of the second factor gets its own `error`.
+ *
+ * @param res the response
+ * @param error why the login failed
+ */
+function sendLoginError(res: Response, error: 'invalid' | 'otp_required' | 'otp_invalid'): void {
+    if (error === 'invalid') {
+        res.status(400).json({
+            code: 400,
+            status: 400,
+            statusCode: 400,
+            name: 'invalid_grant',
+            message: 'Invalid grant: user credentials are invalid',
+        });
+        return;
+    }
+    res.status(401).json({
+        code: 401,
+        status: 401,
+        statusCode: 401,
+        name: error,
+        error,
+        message:
+            error === 'otp_required'
+                ? 'Two-factor authentication code required'
+                : 'Invalid two-factor authentication code',
+    });
+}
+
+/**
+ * Routes with which a user switches the two-factor authentication on and off:
+ *
+ * - `GET /2fa/status?user=` - whether it is on and how many backup codes are left
+ * - `POST /2fa/setup` - a new secret and the `otpauth://` address for the QR code
+ * - `POST /2fa/enable` `{code}` - switch it on with the first code of the app, answers the backup codes
+ * - `POST /2fa/backup-codes` `{code}` - new backup codes
+ * - `POST /2fa/disable` `{user?, code?}` - switch it off: the user with a code, an administrator for others without
+ *
+ * Users set up the second factor only for themselves, because only they can scan the QR code. An administrator
+ * can switch it off for others, e.g. after a lost phone. The POST routes take only JSON: a form of another site
+ * cannot send JSON, so the cookie of a logged-in user cannot be abused from there.
+ *
+ * @param adapter the adapter
+ * @param app the express app
+ * @param model the OAuth2 model, which fills `req.user` and knows the users
+ * @param issuer name shown in the authenticator app
+ */
+function registerSecondFactorRoutes(adapter: ioBroker.Adapter, app: Express, model: OAuth2Model, issuer: string): void {
+    type Handler = (req: Request, res: Response, caller: string, body: Record<string, any>) => Promise<void>;
+
+    const route = (method: 'get' | 'post', path: string, handler: Handler): void => {
+        app[method](path, model.authorize, (req: Request, res: Response): void => {
+            void (async (): Promise<void> => {
+                const user = (req as Request & { user?: string }).user;
+                if (!user) {
+                    res.status(401).json({ error: 'unauthorized' });
+                    return;
+                }
+                let body: Record<string, any> = {};
+                if (method === 'post') {
+                    if (!req.is('application/json')) {
+                        res.status(415).json({ error: 'JSON expected' });
+                        return;
+                    }
+                    try {
+                        body = await readRequestBody(req);
+                    } catch (e) {
+                        res.status(400).json({ error: (e as Error).message });
+                        return;
+                    }
+                }
+                try {
+                    await handler(req, res, shortUserName(user), body);
+                } catch (e) {
+                    adapter.log.error(`2FA: ${(e as Error).message}`);
+                    res.status(500).json({ error: (e as Error).message });
+                }
+            })();
+        });
+    };
+
+    route('get', '/2fa/status', async (req, res, caller) => {
+        const user = typeof req.query.user === 'string' && req.query.user ? shortUserName(req.query.user) : caller;
+        if (user !== caller && !(await isAdministrator(adapter, caller))) {
+            res.status(403).json({ error: 'forbidden' });
+            return;
+        }
+        res.json(await model.secondFactor.getStatus(user));
+    });
+
+    route('post', '/2fa/setup', async (_req, res, caller) => {
+        if (await model.secondFactor.isEnabled(caller)) {
+            res.status(409).json({ error: 'already enabled' });
+            return;
+        }
+        res.json(model.secondFactor.startSetup(caller, issuer));
+    });
+
+    route('post', '/2fa/enable', async (_req, res, caller, body) => {
+        const backupCodes = await model.secondFactor.finishSetup(caller, String(body.code || ''));
+        if (!backupCodes) {
+            res.status(400).json({ error: 'otp_invalid' });
+            return;
+        }
+        res.json({ backupCodes });
+    });
+
+    route('post', '/2fa/backup-codes', async (_req, res, caller, body) => {
+        if (!(await model.verifySecondFactor(caller, String(body.code || '')))) {
+            res.status(400).json({ error: 'otp_invalid' });
+            return;
+        }
+        res.json({ backupCodes: await model.secondFactor.renewBackupCodes(caller) });
+    });
+
+    route('post', '/2fa/disable', async (_req, res, caller, body) => {
+        const user = typeof body.user === 'string' && body.user ? shortUserName(body.user) : caller;
+        if (user === caller) {
+            // Somebody who only found an open session must not switch it off: the user proves it with a code
+            if (!(await model.verifySecondFactor(caller, String(body.code || '')))) {
+                res.status(400).json({ error: 'otp_invalid' });
+                return;
+            }
+        } else if (!(await isAdministrator(adapter, caller))) {
+            res.status(403).json({ error: 'forbidden' });
+            return;
+        } else {
+            adapter.log.info(`2FA: the administrator "${caller}" switches it off for "${user}"`);
+        }
+        await model.secondFactor.disable(user);
+        res.json({ enabled: false });
+    });
+}
+
+/**
  * Create an OAuth2 server on the given Express app.
  *
  * @param adapter The adapter instance
@@ -708,6 +845,25 @@ export function createOAuth2Server(
             }
         }
 
+        // The password grant is checked here and not in `oauth2-server`, because only here the code of the
+        // second factor is known: `oauth2-server` hands just user name and password to the model. After the
+        // check, a one-time key replaces the password, which `model.getUser` accepts for this user only.
+        if (req.body?.grant_type === 'password') {
+            const username = typeof req.body.username === 'string' ? req.body.username : '';
+            const password = typeof req.body.password === 'string' ? req.body.password : '';
+            // A client that knows about the second factor sends `otp`, empty if it does not know the code yet
+            const otp = typeof req.body.otp === 'string' ? req.body.otp : null;
+            if (username && password) {
+                const result = await model.checkLogin(username, password, otp);
+                if ('error' in result) {
+                    sendLoginError(res, result.error);
+                    return;
+                }
+                req.body.username = result.user;
+                req.body.password = model.preAuthorize(result.user);
+            }
+        }
+
         const request = new OAuthRequest(req);
 
         const response = new OAuthResponse(res);
@@ -784,6 +940,8 @@ export function createOAuth2Server(
             }
         }
     });
+
+    registerSecondFactorRoutes(adapter, options.app, model, options.productName || 'ioBroker');
 
     options.app.use(model.authorize);
 
