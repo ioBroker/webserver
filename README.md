@@ -363,7 +363,7 @@ on https).
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.4.1 (2026-11-13)
 - (@GermanBluefox) Fixed: a disabled ioBroker user could still sign in with single sign-on. Like a password login, it is now refused, apart from `admin`
 
 ### 3.4.0 (2026-10-26)
