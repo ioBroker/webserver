@@ -141,8 +141,9 @@ class FakeIdentityProvider {
  * The parts of an adapter that the single sign-on uses
  *
  * @param linkedUsers user ID to the `sub` of the identity it is connected with
+ * @param disabledUsers IDs of the users that are disabled
  */
-function createAdapter(linkedUsers) {
+function createAdapter(linkedUsers, disabledUsers = []) {
     const logged = [];
 
     return {
@@ -157,7 +158,9 @@ function createAdapter(linkedUsers) {
         getObjectViewAsync: async () => ({
             rows: Object.entries(linkedUsers).map(([id, sub]) => ({
                 id,
-                value: { common: { externalAuthentication: { oidc: { sub } } } },
+                value: {
+                    common: { enabled: !disabledUsers.includes(id), externalAuthentication: { oidc: { sub } } },
+                },
             })),
         }),
         getSession: (id, callback) => {
@@ -365,6 +368,33 @@ describe('single sign-on with OpenID Connect', function () {
             assert.match(cookie, /HttpOnly/i, `not readable by scripts: ${cookie}`);
             assert.match(cookie, /SameSite=Lax/i, `not sent along cross-site requests: ${cookie}`);
             assert.doesNotMatch(cookie, /Secure/i, `plain http cannot have a secure cookie: ${cookie}`);
+        });
+
+        it('signs a disabled user not in', async () => {
+            linkedUsers['system.user.eve'] = USER_SUB;
+            adapter = createAdapter(linkedUsers, ['system.user.eve']);
+            await app.stop();
+            app = await startApp(adapter, { issuer, clientId: CLIENT_ID });
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/#tab-intro`)}`);
+
+            assert.ok(!(res.headers.get('location') || '').includes('ssoLoginResponse'));
+            assert.ok(!(res.headers.get('set-cookie') || '').includes('access_token='), 'no session cookie');
+            assert.ok(
+                adapter.logged.some(([level, m]) => level === 'warn' && m.includes('is disabled')),
+                `it is written to the log: ${JSON.stringify(adapter.logged)}`,
+            );
+        });
+
+        it('still signs a disabled admin in, like a password login', async () => {
+            linkedUsers['system.user.admin'] = USER_SUB;
+            adapter = createAdapter(linkedUsers, ['system.user.admin']);
+            await app.stop();
+            app = await startApp(adapter, { issuer, clientId: CLIENT_ID });
+
+            const res = await runFlow(`method=login&redirectUrl=${encodeURIComponent(`${app.base}/#tab-intro`)}`);
+
+            assert.ok((res.headers.get('location') || '').includes('ssoLoginResponse'));
         });
 
         it('signs nobody in for an identity that belongs to no ioBroker user', async () => {

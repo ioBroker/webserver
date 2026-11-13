@@ -363,6 +363,9 @@ on https).
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+- (@GermanBluefox) Fixed: a disabled ioBroker user could still sign in with single sign-on. Like a password login, it is now refused, apart from `admin`
+
 ### 3.4.0 (2026-10-26)
 - (@GermanBluefox) Fixed: the `access_token` cookie of a single sign-on was set without any flags, so page scripts could read it and it was sent along cross-site requests. It is now `HttpOnly`, `SameSite=Lax` and `Secure` on https
 - (@GermanBluefox) Fixed: behind a TLS-terminating reverse proxy `/sso` sent `http://.../sso-callback` as redirect URI, which did not match the one registered at the identity provider, and refused a `redirectUrl` with `https:`. The `baseUrl` option is now used for the single sign-on too

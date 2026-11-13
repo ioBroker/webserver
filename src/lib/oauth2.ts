@@ -583,6 +583,14 @@ export function createOAuth2Server(
                     return;
                 }
 
+                // The same rule as for a password login in js-controller: a disabled user cannot sign
+                // in, apart from `admin`, so that nobody locks themselves out
+                if (!item.value.common?.enabled && item.id !== 'system.user.admin') {
+                    adapter.log.warn(`SSO: the user "${item.id}" is disabled`);
+                    res.redirect(login.redirectUrl);
+                    return;
+                }
+
                 try {
                     const oauthToken = await model.generateTokens(item.id);
                     const responseToken = oauthTokenToResponse(oauthToken);
