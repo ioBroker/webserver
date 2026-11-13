@@ -363,7 +363,7 @@ on https).
   Placeholder for the next version (at the beginning of the line):
   ### **WORK IN PROGRESS**
 -->
-### **WORK IN PROGRESS**
+### 3.5.0 (2026-11-13)
 - (@GermanBluefox) Two-factor authentication with an authenticator app (TOTP): routes `/2fa/*` to set it up, the code is asked at the password login (`otp` at `/oauth/token`, second step on the login page of the authorization code flow). Users with it cannot log in with basic authentication or a password in the URL. Backup codes; an administrator can switch it off for others.
 
 ### 3.4.1 (2026-11-13)
